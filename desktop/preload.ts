@@ -113,6 +113,8 @@ export interface OpenChatCutDesktopApi {
   subscribeTranscriptWindow(listener: (payload: TranscriptWindowPayload) => void): () => void;
   requestTranscriptWindowPayload(): Promise<TranscriptWindowPayload | null>;
   revealExport(destinationId: string, filename: string): Promise<void>;
+  /** Show app.log (the persistent application log) in the file manager. */
+  openLogsFolder(): Promise<void>;
   projectStore(request: ProjectStoreRequest): Promise<ProjectStoreResponse>;
   editorCredentials(): Promise<EditorBootstrapInfo>;
   updates: DesktopUpdateApi;
@@ -200,6 +202,7 @@ const api: OpenChatCutDesktopApi = {
   },
   revealExport: (destinationId, filename) =>
     ipcRenderer.invoke('openchatcut:reveal-export', destinationId, filename) as Promise<void>,
+  openLogsFolder: () => ipcRenderer.invoke('openchatcut:open-logs') as Promise<void>,
   projectStore: (request) =>
     ipcRenderer.invoke(PROJECT_STORE_CHANNEL, request) as Promise<ProjectStoreResponse>,
   editorCredentials: () =>

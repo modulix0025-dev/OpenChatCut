@@ -634,4 +634,5 @@ export default {
   '注意：该文件夹由云盘同步（OneDrive、Dropbox、iCloud 或 Google Drive），同步程序可能锁定、改写文件或只保留在线副本，建议使用本地文件夹。': 'Note: this folder is synced by a cloud client (OneDrive, Dropbox, iCloud or Google Drive). Sync clients can lock, rewrite or keep files online-only; a local folder is safer.',
   '上次移动工程存储目录失败，仍在使用原目录 {from}：{error}': 'The last storage folder move failed; still using {from}: {error}',
   '未知': 'unknown',
+  '打开日志文件夹': 'Open logs folder',
 } as Record<string, string>;

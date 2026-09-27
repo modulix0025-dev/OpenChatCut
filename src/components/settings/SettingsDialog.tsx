@@ -493,6 +493,12 @@ function FooterBar({ reveal, onReveal, message, dirty, saving, onClose, onSave }
       <a href="/fonts/LICENSES.md" target="_blank" rel="noopener noreferrer" style={licenseLink}>
         {t('第三方字体许可')}
       </a>
+      {window.openChatCutDesktop?.openLogsFolder && (
+        <button type="button" style={{ ...licenseLink, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+          onClick={() => { void window.openChatCutDesktop?.openLogsFolder?.(); }}>
+          {t('打开日志文件夹')}
+        </button>
+      )}
       <div style={{ ...footMsg, color: message?.color ?? ON }}>{message?.text ?? ''}</div>
       <button type="button" onClick={onClose} style={btnGhost}>{t('关闭')}</button>
       <button type="button" onClick={onSave} disabled={disabled}

@@ -51,8 +51,8 @@ const SECRET_PATTERNS: readonly RegExp[] = [
   /(https?:\/\/)[^\s/:@]+:[^\s/@]+@/gi,
 ];
 
-/** Remove anything credential-shaped and home-directory paths from `text`. */
-export function redactForAudit(text: string, scrubPaths = true): string {
+/** Replace anything credential-shaped in `text`; no truncation, paths kept. */
+export function redactSecrets(text: string): string {
   let out = text;
   for (const pattern of SECRET_PATTERNS) {
     out = out.replace(pattern, (match, ...groups: unknown[]) => {
@@ -61,6 +61,12 @@ export function redactForAudit(text: string, scrubPaths = true): string {
       return match.length > 0 ? '[redacted]' : match;
     });
   }
+  return out;
+}
+
+/** Remove anything credential-shaped and home-directory paths from `text`. */
+export function redactForAudit(text: string, scrubPaths = true): string {
+  let out = redactSecrets(text);
   if (scrubPaths) out = scrubInternalPaths(out);
   return out.length > MAX_FIELD ? `${out.slice(0, MAX_FIELD)}…` : out;
 }

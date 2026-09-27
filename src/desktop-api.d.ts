@@ -62,6 +62,8 @@ declare global {
       getPathForFile(file: File): string | undefined;
       platform: NodeJS.Platform;
       selectDirectory(defaultPath?: string): Promise<string | null>;
+      /** Show the persistent application log (app.log) in the file manager. */
+      openLogsFolder?(): Promise<void>;
       selectExportDirectory(): Promise<DesktopExportDirectoryGrant | null>;
       selectExportFile(suggestedFilename: string): Promise<DesktopExportFileGrant | null>;
       restoreExportDirectory(): Promise<DesktopExportDirectoryGrant | null>;

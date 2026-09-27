@@ -1,4 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { app, type BrowserWindow } from 'electron';
+import { appLogPath } from './app-log.ts';
 import { externalMcpToken } from '../server/editor-auth.ts';
 import { runDesktopMcpRecoverySmoke } from './smoke-mcp-recovery.ts';
 import { runDesktopRendererRecoverySmoke } from './smoke-renderer-recovery.ts';
@@ -153,4 +155,11 @@ async function runDesktopSecuritySmoke(origin: string, win: BrowserWindow, cooki
   if (page.popup) throw new Error('window.open created a popup');
   if (!page.bridgeKeys) throw new Error('desktop bridge missing');
   console.log('[smoke] security boundaries ok (session gate, no Node, CSP, no popups)');
+  // The persistent log is the only diagnostic channel once devtools are off.
+  const logFile = appLogPath();
+  const logText = logFile && existsSync(logFile) ? readFileSync(logFile, 'utf8') : '';
+  if (!/OpenChatCut started/.test(logText) || !logText.includes('[smoke] security boundaries ok')) {
+    throw new Error(`app log is not being written (${logFile ?? 'no path'})`);
+  }
+  console.log(`[smoke] app log ok (${logFile})`);
 }

@@ -470,6 +470,7 @@ const overrides: Record<string, string> = {
   '注意：该文件夹由云盘同步（OneDrive、Dropbox、iCloud 或 Google Drive），同步程序可能锁定、改写文件或只保留在线副本，建议使用本地文件夹。': 'Attenzione: questa cartella è sincronizzata da un servizio cloud (OneDrive, Dropbox, iCloud o Google Drive), che può bloccare, riscrivere o tenere i file solo online; è più sicura una cartella locale.',
   '上次移动工程存储目录失败，仍在使用原目录 {from}：{error}': 'L’ultimo spostamento della cartella non è riuscito; in uso ancora {from}: {error}',
   '未知': 'sconosciuto',
+  '打开日志文件夹': 'Apri cartella dei log',
 };
 
 export default overrides;

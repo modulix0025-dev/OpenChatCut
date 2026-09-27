@@ -9,6 +9,7 @@ import {
   type StdioPipe,
 } from 'node:child_process';
 import { availableParallelism, constants, setPriority } from 'node:os';
+import { basename } from 'node:path';
 
 /** Cap ffmpeg worker threads so a single encode cannot saturate the whole
  * machine and starve the editor or other Node/Electron applications. */
@@ -31,6 +32,27 @@ export function ffmpegThreadArgs(cores: number = availableParallelism()): string
  * normalization, preview derivatives and export never compete with the user's
  * foreground applications for CPU time. Best-effort on every platform.
  */
+const FAILURE_STDERR_TAIL = 4_000;
+
+/** A failed ffmpeg/ffprobe run goes to the log with its arguments and stderr
+ *  tail, whatever the caller then does with the error. */
+function logFailedRun(child: ChildProcess, command: string, args: readonly string[]): void {
+  let stderr = '';
+  child.stderr?.on('data', (chunk: Buffer | string) => {
+    stderr = `${stderr}${String(chunk)}`.slice(-FAILURE_STDERR_TAIL);
+  });
+  child.once('error', (error) => {
+    console.error(`[media-process] ${basename(command)} could not start: ${error.message}`);
+  });
+  child.once('close', (code, signal) => {
+    if (code === 0) return;
+    const how = code === null ? `killed (${signal ?? 'signal'})` : `exited ${code}`;
+    const line = `[media-process] ${basename(command)} ${how}: ${args.join(' ')}${stderr ? `\n${stderr.trim()}` : ''}`;
+    if (code === null) console.warn(line);
+    else console.error(line);
+  });
+}
+
 export function spawnMediaProcess(
   command: string,
   args: string[],
@@ -57,6 +79,7 @@ export function spawnMediaProcess(
   options: SpawnOptions = {},
 ): ChildProcess {
   const child = spawn(command, args, options);
+  logFailedRun(child, command, args);
   if (child.pid !== undefined) {
     try {
       setPriority(child.pid, constants.priority.PRIORITY_BELOW_NORMAL);

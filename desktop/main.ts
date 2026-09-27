@@ -70,6 +70,7 @@ import {
   validDesktopExportFilename,
 } from './export-directory-state.ts';
 import { runDesktopSmokeProbe } from './smoke-probe.ts';
+import { appLogPath, attachRendererLog, installAppLog } from './app-log.ts';
 import { exitSmoke, installSmokeWatchdog } from './smoke-lifecycle.ts';
 import { runtimeProfile } from '../server/runtime-profile.ts';
 import {
@@ -270,6 +271,7 @@ function registerDesktopHandlers(trustedOrigin: string): void {
       },
     });
     transcriptWindow = win;
+    attachRendererLog(win.webContents, 'transcript');
     const uninstallRendererRecovery = installWindowsRendererRecovery(win);
     win.once('closed', () => {
       uninstallRendererRecovery();
@@ -320,6 +322,10 @@ function registerDesktopHandlers(trustedOrigin: string): void {
     applyResponsiveWindowScale(win);
     win.webContents.send('openchatcut:ui-scale-changed', next);
   }));
+  ipcMain.handle('openchatcut:open-logs', trustedDesktopHandler(trustedOrigin, async () => {
+    const file = appLogPath();
+    if (file) shell.showItemInFolder(file);
+  }));
   ipcMain.handle('openchatcut:reveal-export', trustedDesktopHandler(trustedOrigin, async (
     _event,
     destinationId: unknown,
@@ -345,6 +351,7 @@ async function boot(): Promise<void> {
   await app.whenReady();
   // Security state lives with the app's own data, not in a shared location.
   process.env[AUDIT_LOG_DIR_ENV] ??= join(app.getPath('userData'), 'logs');
+  installAppLog(process.env[AUDIT_LOG_DIR_ENV]);
   process.env[SECURITY_DIR_ENV] ??= join(app.getPath('userData'), 'security');
   // Every privileged action the server, agent or MCP clients attempt is
   // confirmed through this OS-drawn dialog (server/security/capabilities.ts).
@@ -433,6 +440,7 @@ async function boot(): Promise<void> {
   });
   applyDesktopWindowFrame(win);
   installResponsiveWindowScale(win);
+  attachRendererLog(win.webContents, 'editor');
   const uninstallRendererRecovery = installWindowsRendererRecovery(win);
   mainWindow = win;
   win.once('closed', () => {
