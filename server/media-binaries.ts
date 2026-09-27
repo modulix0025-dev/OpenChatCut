@@ -30,16 +30,34 @@ export function unpackedPath(path: string): string {
  * Packaged desktop builds fall back to the platform binaries shipped through
  * production dependencies, so media import does not depend on the user's PATH.
  */
+export const PACKAGED_RUNTIME_ENV = 'OPENCHATCUT_PACKAGED';
+
+/**
+ * Executable allowlisting: a packaged desktop build runs only the binaries it
+ * ships. Environment overrides (FFMPEG_PATH is set machine-wide by plenty of
+ * other software) are a developer affordance and are ignored when packaged.
+ */
+export function binaryOverridesAllowed(): boolean {
+  return process.env[PACKAGED_RUNTIME_ENV] !== '1';
+}
+
+function envOverride(...names: string[]): string | undefined {
+  if (!binaryOverridesAllowed()) return undefined;
+  for (const name of names) {
+    const value = process.env[name];
+    if (value) return value;
+  }
+  return undefined;
+}
+
 export function ffmpegBin(): string {
-  return process.env.OPENCHATCUT_FFMPEG
-    ?? process.env.FFMPEG_PATH
+  return envOverride('OPENCHATCUT_FFMPEG', 'FFMPEG_PATH')
     ?? (ffmpegStatic ? unpackedPath(ffmpegStatic) : null)
     ?? 'ffmpeg';
 }
 
 export function ffprobeBin(): string {
-  return process.env.OPENCHATCUT_FFPROBE
-    ?? process.env.FFPROBE_PATH
+  return envOverride('OPENCHATCUT_FFPROBE', 'FFPROBE_PATH')
     ?? (ffprobeInstaller.path ? unpackedPath(ffprobeInstaller.path) : null)
     ?? 'ffprobe';
 }
@@ -51,7 +69,7 @@ export function ffprobeBin(): string {
  * explicit override wins for locally compiled binaries.
  */
 export function whisperCliBin(): string {
-  const override = process.env.OPENCHATCUT_WHISPER_CLI;
+  const override = envOverride('OPENCHATCUT_WHISPER_CLI');
   if (override) return override;
   const platformKey = `${process.platform}-${process.arch}`;
   const suffix = process.platform === 'win32' ? '.exe' : '';

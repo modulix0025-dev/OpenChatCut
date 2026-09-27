@@ -18,6 +18,7 @@ import { listenWithAffinity } from './embedded-port.ts';
 import { runtimeProfile } from '../server/runtime-profile.ts';
 import { distStaticMiddleware, uploadsMiddleware } from './static-files.ts';
 import { registerProductAssetRoot } from '../server/product-assets.ts';
+import { embeddedRequestGate } from './embedded-request-gate.ts';
 
 export interface EmbeddedServer {
   server: Server;
@@ -71,7 +72,16 @@ export function mountAssemblyAiProxy(
   app.use('/assemblyai', proxyMiddleware(route));
 }
 
-export async function startEmbeddedServer(distDir: string): Promise<EmbeddedServer> {
+export interface EmbeddedServerOptions {
+  /** Per-launch secret the Electron session presents as an HttpOnly cookie.
+   *  When set, requests without it are refused (desktop/embedded-request-gate.ts). */
+  readonly sessionSecret?: string | null;
+}
+
+export async function startEmbeddedServer(
+  distDir: string,
+  options: EmbeddedServerOptions = {},
+): Promise<EmbeddedServer> {
   // Product files (fonts, voice samples, LUTs, …) live in resources/dist when packaged.
   registerProductAssetRoot(distDir);
   await seedFromEnvLocal();
@@ -80,6 +90,10 @@ export async function startEmbeddedServer(distDir: string): Promise<EmbeddedServ
     console.error('[embedded-server]', err instanceof Error ? err.message : err);
   });
   const server = createServer((req, res) => app.handle(req, res));
+  let boundPort = 0;
+
+  // Front door: Host allowlist (DNS rebinding) + desktop session secret.
+  app.use(embeddedRequestGate({ port: () => boundPort, sessionSecret: options.sessionSecret ?? null }));
 
   // Authorize the renderer request before the proxy can inject the provider key.
   mountAssemblyAiProxy(app);
@@ -115,5 +129,6 @@ export async function startEmbeddedServer(distDir: string): Promise<EmbeddedServ
     server,
     profile.mode === 'isolated-dev' ? { profileId: profile.id } : {},
   );
+  boundPort = port;
   return { server, port, origin: `http://127.0.0.1:${port}` };
 }

@@ -18,6 +18,7 @@ import {
   isSkillPath, publishSkillFiles, stageCloneSkillFiles, stageSkillFile,
   validateSkillFiles, validateSkillPath, type SkillInstallFile,
 } from './skill-install-files.ts';
+import { isCapabilityDenied, requireCapability } from '../security/capabilities.ts';
 // Proxy-aware fetch: attaches the configured outbound proxy (keystore
 // PROXY_URL or HTTPS_PROXY/HTTP_PROXY env) via undici dispatcher.
 type FetchInit = Parameters<typeof fetch>[1] & { dispatcher?: unknown };
@@ -188,12 +189,25 @@ export function skillInstallPlugin(): Plugin {
         if (req.method !== 'POST') { sendJson(res, 405, { error: 'method not allowed — use POST' }); return; }
         try {
           const body = await readJson(req);
+          const parsedRepo = parseRepo(body.repo);
+          if (parsedRepo) {
+            // Installing a skill downloads third-party scripts that skills can
+            // later ask to run; the user confirms the exact repository first.
+            await requireCapability({
+              capability: 'SYSTEM_INTEGRATION',
+              action: 'skill.install',
+              requester: 'agent',
+              summary: `install a third-party skill from GitHub (${parsedRepo.owner}/${parsedRepo.repo})`,
+              detail: `Source: https://github.com/${parsedRepo.owner}/${parsedRepo.repo}\n\nSkills can contain scripts. Each script still needs its own permission before it runs.`,
+              scopeKey: `skill.install:${parsedRepo.owner}/${parsedRepo.repo}`,
+            });
+          }
           const result = await installGitHubSkill(body.repo, body.slug);
           sendJson(res, 200, { ok: true, ...result, note: '技能已安装到用户技能目录，面板会自动展示。' });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           server.config.logger.error(`[api/skills/install] ${message}`);
-          if (!res.headersSent) sendJson(res, 400, { error: message });
+          if (!res.headersSent) sendJson(res, isCapabilityDenied(error) ? 403 : 400, { error: message });
         }
       });
     },

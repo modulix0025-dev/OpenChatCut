@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react';
 import { existsSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { serverPlugins } from '../server/plugins/index.ts';
+import { developmentCapabilityPrompter, registerCapabilityPrompter } from '../server/security/capabilities.ts';
 import { seedKeystore, getKey } from '../server/keystore.ts';
 import { productAssetsPlugin } from '../server/product-assets.ts';
 import { runtimeProfile } from '../server/runtime-profile.ts';
@@ -148,7 +149,18 @@ export default defineConfig(({ mode }) => {
     // public/ = user runtime only (media/uploads). Product static files live in assets/
     // and are served/copied by productAssetsPlugin (URLs unchanged: /fonts, /thumbnails, …).
     publicDir: 'public',
-    plugins: [serveOrtWasmLoader(), react(), productAssetsPlugin(), excludeUserMediaFromBuild(), ...serverPlugins()],
+    plugins: [
+      serveOrtWasmLoader(), react(), productAssetsPlugin(), excludeUserMediaFromBuild(),
+      {
+        // Source-checkout dev server: explicit development capability policy
+        // (the packaged desktop registers its native prompt instead).
+        name: 'openchatcut-dev-capability-policy',
+        configureServer(server) {
+          registerCapabilityPrompter(developmentCapabilityPrompter((message) => server.config.logger.warn(message)));
+        },
+      },
+      ...serverPlugins(),
+    ],
     server: {
       port: 5199,
       strictPort: true,

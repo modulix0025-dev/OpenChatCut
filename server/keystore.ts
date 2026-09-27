@@ -15,6 +15,11 @@ import {
   normalizeLlmProvider,
 } from "../shared/llm-providers.ts";
 import { KEY_NAMES, NON_SECRET_NAMES, type KeyName } from "./keystore-names.ts";
+
+/** `http://user:pass@host` → `http://***@host`; other values unchanged. */
+export function redactUrlCredentials(value: string): string {
+  return value.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/@\s]+@/i, "$1***@");
+}
 export { KEY_NAMES, NON_SECRET_NAMES, type KeyName } from "./keystore-names.ts";
 import {
   MODEL_CAPABILITY_OVERRIDES_KEY,
@@ -220,7 +225,8 @@ export function keyStatus(): KeyStatus {
       configured: set,
       source: set ? (envSeeded.has(name) ? "env" : "runtime") : "none",
     };
-    if (NON_SECRET_NAMES.has(name)) models[name] = getKey(name);
+    // PROXY_URL is configuration, but a proxy URL can embed user:password.
+    if (NON_SECRET_NAMES.has(name)) models[name] = name === 'PROXY_URL' ? redactUrlCredentials(getKey(name)) : getKey(name);
   }
   return { keys, caps: computeCaps(), models };
 }

@@ -10,6 +10,9 @@ import { basename, join } from 'node:path';
 import { ffprobeBin } from '../media-binaries.ts';
 import { uploadReadDirs } from '../media-dir.ts';
 import { resolveMediaReference } from '../media-references.ts';
+import { requireCapability } from '../security/capabilities.ts';
+import { isSafeLocalPath } from '../security/local-path-safety.ts';
+import { audit } from '../security/audit-log.ts';
 
 /** dev / worktree upload root; isolated profiles read only their own store but
  * dev media commonly lives here too. */
@@ -100,8 +103,21 @@ export function resolveMediaPath(
     }
     return undefined;
   }
-  if (existsSync(clean)) return clean;
+  // Absolute paths from a timeline are untrusted: UNC/device/ADS shapes would
+  // make the OS open network shares or devices before any check runs.
+  if (isSafeLocalPath(clean) && existsSync(clean)) return clean;
   return undefined;
+}
+
+/** Child environment without credentials: capcut-cli needs none of the user's keys. */
+export function scrubbedChildEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined) continue;
+    if (/(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH|COOKIE|SESSION)/i.test(key)) continue;
+    out[key] = value;
+  }
+  return out;
 }
 
 /**
@@ -124,7 +140,7 @@ function runCapcut(args: string[], timeoutMs = 120_000): Promise<unknown> {
   const prefix = capcutCommand();
   return new Promise((resolve, reject) => {
     const child = spawn(prefix[0], [...prefix.slice(1), ...args], {
-      env: { ...process.env, FORCE_COLOR: '0' },
+      env: { ...scrubbedChildEnv(), FORCE_COLOR: '0' },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';
@@ -342,12 +358,45 @@ export async function exportJianyingDraft(
   const draftName = String(request.draftName || `OpenChatCut-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '')}`)
     .replace(/[\\/]/g, '')
     .replaceAll('\0', '')
+    // A leading "-" would be parsed by capcut-cli as an option; leading dots
+    // make ".." (parent directory) or hidden folders.
+    .replace(/[<>:"|?*]/g, '')
+    .split('').filter((ch) => ch.charCodeAt(0) >= 0x20 && ch.charCodeAt(0) !== 0x7f).join('')
+    .replace(/^[-.\s]+/, '')
     .slice(0, 60);
   if (!draftName) {
     return { ok: false, draftName: '', draftPath: '', addedVideos: 0, addedAudios: 0, captions: 0, warnings, error: 'invalid draft name' };
   }
   const draftsDir = expandHomeDir(String(request.draftsDir || '').trim())
     || DEFAULT_CAPCUT_STORE;
+  if (!isSafeLocalPath(draftsDir)) {
+    audit({ event: 'path.rejected', capability: 'FILES_WRITE', action: 'jianying.export', target: draftsDir });
+    return { ok: false, draftName, draftPath: '', addedVideos: 0, addedAudios: 0, captions: 0, warnings, error: 'invalid drafts directory' };
+  }
+  if (!options.run) {
+    // Real exports launch capcut-cli (via npx, fetched from npm unless
+    // CAPCUT_CLI points at a local build) and write a draft tree to disk.
+    const command = capcutCommand().join(' ');
+    await requireCapability({
+      capability: 'PROCESS_EXECUTION',
+      action: 'jianying.capcut-cli',
+      requester: 'agent',
+      summary: 'run capcut-cli to create a CapCut/JianYing draft',
+      detail: `Command: ${command}\n${command.startsWith('npx') ? 'This downloads the pinned capcut-cli package from npm and runs it.' : ''}`,
+      scopeKey: `jianying.capcut-cli:${command}`,
+    });
+    if (draftsDir !== DEFAULT_CAPCUT_STORE) {
+      await requireCapability({
+        capability: 'FILES_WRITE',
+        action: 'jianying.drafts-dir',
+        requester: 'agent',
+        summary: 'write a CapCut/JianYing draft into a folder',
+        detail: `Folder: ${draftsDir}`,
+        scopeKey: `jianying.drafts:${draftsDir}`,
+      });
+    }
+    audit({ event: 'process.exec', capability: 'PROCESS_EXECUTION', action: 'jianying.capcut-cli', target: draftsDir });
+  }
   const storeFlags = ['--jianying', '--force-write', '--drafts', draftsDir];
   const created = await run(['init', draftName, ...storeFlags]) as { ok?: boolean; draft_path?: string; error?: string };
   if (!created?.ok || !created.draft_path) {

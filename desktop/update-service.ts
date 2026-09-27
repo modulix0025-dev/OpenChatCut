@@ -14,10 +14,19 @@ export interface DesktopUpdateSupportContext {
   readonly packaged: boolean;
   readonly smoke: boolean;
   readonly platform: NodeJS.Platform;
+  /**
+   * Release-build switch (package.json `openchatcut.directUpdates`). In-app
+   * download-and-install replaces this executable with whatever the publish
+   * feed serves; without a code-signing identity the only integrity check is
+   * the feed's own checksum. Builds without signing keep it off and point users
+   * to the release page instead. Undefined keeps the legacy behavior (tests).
+   */
+  readonly directUpdatesAllowed?: boolean;
 }
 
 export function supportsDirectDesktopUpdates(context: DesktopUpdateSupportContext): boolean {
   if (!context.packaged || context.smoke) return false;
+  if (context.directUpdatesAllowed === false) return false;
   return context.platform === 'win32' || context.platform === 'linux';
 }
 

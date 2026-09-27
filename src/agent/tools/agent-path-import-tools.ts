@@ -14,7 +14,7 @@ export const AGENT_PATH_IMPORT_SCHEMAS: AgentToolSchema[] = [
     description: [
       'Browse local directories or search local media filenames before importing into the media pool.',
       'Desktop only. Defaults to the home directory; absolute paths may include external drives.',
-      'Local access is enabled by default; an explicit AGENT_IMPORT_ROOTS setting restricts access.',
+      'Only folders the user granted through the folder picker are reachable; the desktop asks the user to choose a folder the first time.',
       'Returns directories and supported media paths, sizes, and modification times without importing.',
       'Use recursive with query/kind to find candidates, then import_assets for selected files.',
       'Follow nextOffset for more results. If truncated, browse narrower subdirectories; symlinks are not followed.',
@@ -33,7 +33,7 @@ export const AGENT_PATH_IMPORT_SCHEMAS: AgentToolSchema[] = [
   },
   {
     name: 'import_assets',
-    description: 'Import selected local media paths into the media pool in one batch. Desktop only. Local access is enabled by default; explicit AGENT_IMPORT_ROOTS restricts access. Reuses normal media probing and skips duplicate content. Use browse_local_media to find paths first.',
+    description: 'Import selected local media paths into the media pool in one batch. Desktop only. Only folders the user granted through the folder picker are reachable; the desktop asks the user to choose a folder when needed. Reuses normal media probing and skips duplicate content. Use browse_local_media to find paths first.',
     input_schema: {
       type: 'object',
       properties: {
@@ -46,7 +46,7 @@ export const AGENT_PATH_IMPORT_SCHEMAS: AgentToolSchema[] = [
     name: 'import_asset',
     description: [
       'Import ONE local media file (video/audio/image) by its absolute disk path into the media pool.',
-      'Desktop app only; local access is enabled by default. Explicit AGENT_IMPORT_ROOTS restricts access.',
+      'Desktop app only; only folders the user granted through the folder picker are reachable.',
       'Returns the imported pool asset(s); duplicates already in the pool are skipped.',
     ].join(' '),
     input_schema: {
@@ -61,7 +61,7 @@ export const AGENT_PATH_IMPORT_SCHEMAS: AgentToolSchema[] = [
     name: 'import_folder',
     description: [
       'Import every supported media file inside a local directory (recursive, bounded) into the media pool.',
-      'Desktop app only; local access is enabled by default. Explicit AGENT_IMPORT_ROOTS restricts access.',
+      'Desktop app only; only folders the user granted through the folder picker are reachable.',
       'Returns imported assets, duplicate counts, unsupported file names, and per-file errors.',
       'Documents (txt/md/docx/pdf) are reported as unsupported here and should be attached to chat instead.',
     ].join(' '),

@@ -29,6 +29,12 @@ export function isSafeUploadName(name: string): boolean {
     const code = ch.charCodeAt(0);
     return code < 0x20 || code === 0x7f;
   })) return false;
+  // Windows: ':' selects an NTFS alternate data stream, device names (CON,
+  // NUL, COM1…) open devices, and trailing dots/spaces are silently stripped
+  // (so two different names would address the same file).
+  if (name.includes(':')) return false;
+  if (/^(con|prn|aux|nul|conin\$|conout\$|com[0-9¹²³]|lpt[0-9¹²³])(\..*)?$/i.test(name)) return false;
+  if (/[. ]$/.test(name)) return false;
   return true;
 }
 

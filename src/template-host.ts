@@ -1,26 +1,39 @@
 // The "drop-in seam" + a sandbox for evaluating templates.
 //
 // Templates are no-import `({item}) => JSX` arrow functions that use
-// INJECTED globals. They can be AI-generated / user-supplied, so evaluating
-// them is a security-critical path (arbitrary JS runs every frame).
+// INJECTED globals. They can be AI-generated, imported from a project file, or
+// installed from a plugin URL, so evaluating them is a security-critical path
+// (arbitrary JS runs every frame inside the privileged editor renderer).
 //
-// Defense in depth (two layers):
-//   1. static validation — reject code containing network / storage / DOM-escape
-//      / dynamic-code / infinite-loop patterns before it ever runs.
-//   2. restricted scope — the eval Function shadows every reachable dangerous
-//      global (window/document/fetch/eval/Function/…) with `undefined`, and runs
-//      in strict mode (no implicit globals, `this` === undefined).
+// Defense in depth (four layers):
+//   1. static blocklist — reject code containing network / storage / DOM-escape
+//      / dynamic-code / infinite-loop patterns before it ever parses.
+//   2. AST capability check (template-guard.ts) — every free identifier must be
+//      on an explicit allowlist (so `openChatCutDesktop`, `window`, `fetch`, … are
+//      unreachable by name), dangerous property names (`constructor`,
+//      `__proto__`, `ownerDocument`, `defaultView`, …) are rejected statically,
+//      and every computed member access `obj[expr]` is rewritten through a runtime
+//      key guard so string-building tricks cannot reach them either.
+//   3. restricted scope — the eval Function receives only the allowlisted
+//      globals and runs in strict mode (no implicit globals, `this` === undefined).
+//   4. element filter — createElement refuses script/iframe/object/embed/base/
+//      form/link/meta elements, strips srcDoc/formAction, and only lets
+//      dangerouslySetInnerHTML through when the markup parses to inert content.
 //
-// ⚠️ This is hardening, NOT a hard VM boundary. A determined attacker could still
-// reach the real global via a dynamically-computed prototype-chain constructor
-// traversal that slips past the static check. PRODUCTION must additionally run
-// templates in a sandboxed <iframe sandbox="allow-scripts"> (opaque origin) or a
-// QuickJS WASM realm.
+// The packaged desktop app additionally serves a Content-Security-Policy that
+// forbids inline and remote scripts, so injected markup cannot execute code.
+// This is still not a hard VM boundary; see docs/security/THREAT_MODEL.md.
 import * as React from 'react';
 import {
   useCurrentFrame, useVideoConfig, interpolate, interpolateColors,
   spring, Easing, random, Img as RemotionImg, Video, Audio, Sequence, AbsoluteFill, staticFile,
 } from 'remotion';
+import {
+  TEMPLATE_KEY_GUARD,
+  guardTemplateKey,
+  safeTemplateGlobals,
+  guardTemplateSource,
+} from './template-guard';
 
 export type MgItem = { props: Record<string, unknown>; width: number; height: number };
 export type MgComponent = React.FC<{ item: MgItem }>;
@@ -49,9 +62,48 @@ const Img: React.FC<Record<string, unknown>> = (props) =>
 // Only move this attribute with zero ambiguity (filter/mask/clipPath, etc. are legal SVG attributes and must not be touched).
 const CSS_ONLY_PROPS = ['mixBlendMode'] as const;
 
+// Elements that can load or run code, navigate the editor, or rewrite how the
+// document resolves URLs. None is needed to draw a frame.
+const BLOCKED_TEMPLATE_ELEMENTS: ReadonlySet<string> = new Set([
+  'script', 'iframe', 'frame', 'frameset', 'object', 'embed', 'applet', 'base',
+  'link', 'meta', 'form', 'portal', 'webview', 'noscript', 'template', 'slot',
+]);
+const BLOCKED_TEMPLATE_PROPS = ['srcDoc', 'srcdoc', 'formAction', 'action', 'is'] as const;
+
+/** True when `html` parses to markup with no scripts, handlers or code URLs. */
+export function isInertTemplateMarkup(html: unknown): boolean {
+  if (typeof html !== 'string') return false;
+  if (typeof DOMParser === 'undefined') return false;
+  // Parsing into a detached document never runs scripts or loads resources.
+  const doc = new DOMParser().parseFromString(`<!doctype html><body>${html}`, 'text/html');
+  for (const el of Array.from(doc.body.querySelectorAll('*'))) {
+    const tag = el.localName.toLowerCase();
+    if (BLOCKED_TEMPLATE_ELEMENTS.has(tag) || tag === 'foreignobject' || tag === 'style') return false;
+    for (const attr of Array.from(el.attributes)) {
+      const name = attr.name.toLowerCase();
+      if (name.startsWith('on')) return false;
+      // Browsers ignore leading controls/whitespace in URLs ("\u0001javascript:").
+      const value = attr.value.split('').filter((ch) => ch.charCodeAt(0) > 0x20).join('').toLowerCase();
+      if (/^(javascript|vbscript|data:text\/html)/.test(value)) return false;
+      if ((name === 'href' || name.endsWith(':href') || name === 'src') && !value.startsWith('#')) return false;
+    }
+  }
+  return true;
+}
+
 const createElementSafe = ((type: unknown, props: unknown, ...children: unknown[]) => {
+  // Rendered as nothing (not thrown) so one hostile node cannot blank the preview.
+  if (typeof type === 'string' && BLOCKED_TEMPLATE_ELEMENTS.has(type.toLowerCase())) return null;
   if (typeof type === 'string' && props && typeof props === 'object') {
-    const p = props as Record<string, unknown>;
+    let p = props as Record<string, unknown>;
+    if (BLOCKED_TEMPLATE_PROPS.some((key) => key in p) || 'dangerouslySetInnerHTML' in p) {
+      const rest = { ...p };
+      for (const key of BLOCKED_TEMPLATE_PROPS) delete rest[key];
+      const inner = rest.dangerouslySetInnerHTML as { __html?: unknown } | undefined;
+      if (inner !== undefined && !isInertTemplateMarkup(inner?.__html)) delete rest.dangerouslySetInnerHTML;
+      p = rest;
+      props = rest;
+    }
     let moved: Record<string, unknown> | null = null;
     for (const key of CSS_ONLY_PROPS) {
       if (key in p) (moved ??= {})[key] = p[key];
@@ -70,7 +122,12 @@ const createElementSafe = ((type: unknown, props: unknown, ...children: unknown[
 // Exactly the same as real React, only createElement plus the above host-property→style return.
 // Use Proxy to forward all other members (Fragment/hooks/…), not affected by enumerability.
 const HostReact = new Proxy(React, {
-  get: (target, prop, recv) => (prop === 'createElement' ? createElementSafe : Reflect.get(target, prop, recv)),
+  get: (target, prop, recv) => {
+    if (prop === 'createElement') return createElementSafe;
+    // React's internals object and legacy hooks are not part of the template API.
+    if (typeof prop === 'string' && (prop.startsWith('__') || prop === 'createFactory')) return undefined;
+    return Reflect.get(target, prop, recv);
+  },
 });
 
 // The only globals a template legitimately needs (verified across all 211).
@@ -141,8 +198,12 @@ function templateName(code: string): string {
 }
 
 function evaluateTemplate(transpiled: string, name: string): MgComponent {
-  const names = [...Object.keys(WHITELIST), ...SHADOW];
-  const values = [...Object.values(WHITELIST), ...SHADOW.map(() => undefined)];
+  const globals = safeTemplateGlobals();
+  const shadow = SHADOW.filter((key) => !(key in globals) && !(key in WHITELIST));
+  const names = [...Object.keys(WHITELIST), ...Object.keys(globals), TEMPLATE_KEY_GUARD, ...shadow];
+  const values = [
+    ...Object.values(WHITELIST), ...Object.values(globals), guardTemplateKey, ...shadow.map(() => undefined),
+  ];
   const factory = new Function(...names, `"use strict";\n${transpiled}\n;return ${name};`);
   return factory(...values) as MgComponent;
 }
@@ -157,7 +218,8 @@ async function compileUncached(code: string): Promise<MgComponent> {
     filename: 'template.jsx',
   }).code;
   if (!output) throw new Error('template: babel 无输出');
-  return evaluateTemplate(output, name);
+  const guarded = guardTemplateSource(Babel, output, Object.keys(WHITELIST));
+  return evaluateTemplate(guarded, name);
 }
 
 /** Validate, compile, and cache one code-backed template before it can render. */

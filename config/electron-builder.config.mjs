@@ -98,6 +98,24 @@ export default {
     ...sqliteVecFilters,
   ],
   asar: true,
+  // Electron fuses are flipped in the packaged binary itself, so they hold even
+  // if an attacker controls the environment or command line:
+  // - no ELECTRON_RUN_AS_NODE / NODE_OPTIONS / --inspect: the signed app
+  //   binary can never be turned into a general-purpose Node.js interpreter;
+  // - the app only loads from app.asar, and on Windows/macOS the archive's
+  //   integrity hash is embedded in the executable and verified at startup;
+  // - cookies (including the per-launch desktop session cookie) are encrypted
+  //   at rest with the OS keychain / DPAPI;
+  // - file:// gets no extra privileges (the editor is served over loopback HTTP).
+  electronFuses: {
+    runAsNode: false,
+    enableCookieEncryption: true,
+    enableNodeOptionsEnvironmentVariable: false,
+    enableNodeCliInspectArguments: false,
+    enableEmbeddedAsarIntegrityValidation: true,
+    onlyLoadAppFromAsar: true,
+    grantFileProtocolExtraPrivileges: false,
+  },
   // Real files next to the archive (app.asar.unpacked): executables and shared libraries
   // that a child process or SQLite must open by path. Node's own require of a .node binding
   // is redirected here by Electron; spawn/dlopen paths go through unpackedPath().
@@ -114,8 +132,10 @@ export default {
     // Exclude media/uploads because Vite copies all of public/ into dist, which would embed gigabytes of user assets.
     // uploadsMiddleware serves /media/uploads directly from the asset directory (userData in packaged builds),
     // so resources/dist never needs those files.
-    { from: 'dist', to: 'dist', filter: ['**/*', '!media/uploads/**'] },
-    { from: 'desktop-dist/remotion-bundle', to: 'remotion-bundle' },
+    // Source maps are never shipped: they would expose full sources and any
+    // inlined build-time values without helping end users.
+    { from: 'dist', to: 'dist', filter: ['**/*', '!media/uploads/**', '!**/*.map'] },
+    { from: 'desktop-dist/remotion-bundle', to: 'remotion-bundle', filter: ['**/*', '!**/*.map'] },
     { from: 'desktop-dist/chrome-headless-shell', to: 'chrome-headless-shell' },
   ],
   npmRebuild: false,
@@ -134,12 +154,37 @@ export default {
     ...(hasMacSigningCertificate ? {} : { identity: '-' }),
   },
   win: {
-    target: ['nsis'],
+    // NSIS installer (with uninstaller) plus a portable single-file executable.
+    // desktop:dist:win builds the installer only (release feed); use
+    // desktop:dist:win:all for both.
+    target: ['nsis', 'portable'],
     icon: 'public/openchatcut-icon.png',
+    // The application never asks for elevation; it runs as the signed-in user.
+    requestedExecutionLevel: 'asInvoker',
+    legalTrademarks: 'OpenChatCut',
+    // Signing is configured only through CSC_LINK / CSC_KEY_PASSWORD (or
+    // WIN_CSC_LINK) in the build environment; see docs/security/CODE_SIGNING.md.
+    // Unsigned builds are expected to trigger SmartScreen.
   },
   nsis: {
     oneClick: false,
+    // Per-user install into %LOCALAPPDATA%\Programs by default: no UAC prompt
+    // and no machine-wide changes. Users may still choose a per-machine install,
+    // which is the only path that asks Windows for administrator rights.
+    perMachine: false,
+    allowElevation: true,
     allowToChangeInstallationDirectory: true,
+    createDesktopShortcut: true,
+    createStartMenuShortcut: true,
+    shortcutName: 'OpenChatCut',
+    uninstallDisplayName: 'OpenChatCut',
+    // Uninstall keeps the user's projects/media (userData) unless they tick the box.
+    deleteAppDataOnUninstall: false,
+    // Default artifact name (OpenChatCut-<version>-x64.exe) is kept: the
+    // update feed (latest-x64.yml) and the release gate reference it.
+  },
+  portable: {
+    artifactName: '${productName}-Portable-${version}-${arch}.${ext}',
   },
   linux: {
     target: ['AppImage'],

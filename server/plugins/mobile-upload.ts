@@ -4,6 +4,7 @@ import { editorCredentialAuthorized, trustedEditorRequest } from '../editor-auth
 import { MobileUploadService } from '../mobile-upload-service.ts';
 import { putUploadFile } from '../r2.ts';
 import { maxUploadBytes } from './upload.ts';
+import { isCapabilityDenied, requireCapability } from '../security/capabilities.ts';
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
@@ -43,6 +44,16 @@ export async function handleMobileUploadControl(
   try {
     const url = new URL(req.url ?? '/', 'http://localhost');
     if (req.method === 'POST' && url.pathname === '/sessions') {
+      // A session opens a listener on every network interface so a phone on
+      // the same Wi-Fi can reach it; the user confirms before the LAN is exposed.
+      await requireCapability({
+        capability: 'NETWORK_ACCESS',
+        action: 'mobile-upload.lan',
+        requester: 'editor',
+        summary: 'accept file uploads from devices on your local network for 10 minutes',
+        detail: 'A temporary upload page is served on your local network. Only someone with the QR code link can upload, but traffic is not encrypted.',
+        scopeKey: 'mobile-upload.lan',
+      });
       sendJson(res, 201, await service.createSession(mobilePageLocale(url.searchParams.get('locale'))));
       return;
     }
@@ -61,7 +72,7 @@ export async function handleMobileUploadControl(
     sendJson(res, 405, { error: 'method not allowed' });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const status = /no LAN IPv4/i.test(message) ? 503 : 500;
+    const status = isCapabilityDenied(error) ? 403 : /no LAN IPv4/i.test(message) ? 503 : 500;
     sendJson(res, status, { error: message });
   }
 }

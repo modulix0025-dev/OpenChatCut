@@ -276,7 +276,8 @@ export async function runClaudeCodeTurn(
     const systemPromptPath = join(dirname(mcpConfigPath), `system-${randomUUID()}.txt`);
     await writeFile(systemPromptPath, systemPrompt, 'utf8');
     const args = [
-      '-p', request.prompt,
+      // A prompt starting with "-" would otherwise be parsed as a CLI option.
+      '-p', request.prompt.startsWith('-') ? ` ${request.prompt}` : request.prompt,
       '--output-format', 'stream-json',
       '--include-partial-messages',
       '--verbose',

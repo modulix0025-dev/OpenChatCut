@@ -4,13 +4,20 @@
 // cwd locked to the skill directory, timeout, output cap, no env inheritance
 // beyond PATH/HOME. Runs the deterministic scripts shipped with a skill
 // (render.mjs, check-deps.sh, …) that a cloud sandbox cannot reach.
+//
+// The whitelist narrows WHAT can run but cannot make it safe (npx/uvx fetch and
+// run registry code; an installed skill's scripts are third-party code), so
+// every distinct command line additionally needs an explicit PROCESS_EXECUTION
+// grant from the user through the capability broker. Default: deny.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { access } from 'node:fs/promises';
-import { join, resolve, sep } from 'node:path';
+import { access, realpath } from 'node:fs/promises';
+import { basename, join, resolve, sep } from 'node:path';
 import { skillDirFor, skillFilesRoot } from '../skills-files.ts';
+import { isCapabilityDenied, requireCapability } from '../security/capabilities.ts';
+import { audit } from '../security/audit-log.ts';
 
 const execFileAsync = promisify(execFile);
 
@@ -32,7 +39,9 @@ const INTERPRETERS = new Set(['bash', 'sh', 'node', 'python3', 'python']);
 const INLINE_EXEC_FLAGS: Record<string, RegExp> = {
   bash: /^-[A-Za-z]*c/,
   sh: /^-[A-Za-z]*c/,
-  node: /^(-[A-Za-z]*[ep]|--eval(=|$)|--print(=|$))/,
+  // -r/--require/--import/--loader preload arbitrary modules (including data:
+  // URLs) before the "script", so they are inline execution too.
+  node: /^(-[A-Za-z]*[epr]|--eval(=|$)|--print(=|$)|--require(=|$)|--import(=|$)|--(experimental-)?loader(=|$)|--inspect|--env-file)/,
   python: /^(-[A-Za-z]*[cm]|--command(=|$))/,
   python3: /^(-[A-Za-z]*[cm]|--command(=|$))/,
 };
@@ -51,7 +60,25 @@ export function interpreterGuardError(dir: string, binary: string, args: string[
   if (resolved !== dir && !resolved.startsWith(dir + sep)) {
     return `script path escapes the skill directory: ${script}`;
   }
+  // SKILL.md is free text any agent can rewrite through manage_skill; it is
+  // documentation, never an executable script.
+  if (basename(resolved).toLowerCase() === 'skill.md') {
+    return 'SKILL.md is not an executable script';
+  }
   return null;
+}
+
+/** Symlink-aware containment: the real script must also live in the skill dir. */
+async function realScriptEscapes(dir: string, binary: string, args: string[]): Promise<boolean> {
+  if (!INTERPRETERS.has(binary)) return false;
+  const script = args.find((arg) => !arg.startsWith('-'));
+  if (!script) return false;
+  try {
+    const [realDir, realScript] = await Promise.all([realpath(dir), realpath(resolve(dir, script))]);
+    return realScript !== realDir && !realScript.startsWith(realDir + sep);
+  } catch {
+    return false; // A missing script fails at execFile time.
+  }
 }
 
 const MAX_TIMEOUT_MS = 120_000;
@@ -120,8 +147,27 @@ async function runInSkillDir(slug: string, body: ExecRequest): Promise<unknown> 
   const rest = body.command.slice(binary.length).trim();
   const args = rest ? rest.split(/\s+/) : [];
   args.push(...body.args);
-  const guardError = interpreterGuardError(dir, binary, args);
-  if (guardError) return { error: guardError };
+  const guardError = interpreterGuardError(dir, binary, args)
+    ?? (await realScriptEscapes(dir, binary, args) ? 'script resolves outside the skill directory' : null);
+  if (guardError) {
+    audit({ event: 'process.blocked', capability: 'PROCESS_EXECUTION', action: 'skill.exec', target: `${slug}: ${binary}`, detail: guardError });
+    return { error: guardError };
+  }
+  const commandLine = [binary, ...args].join(' ');
+  try {
+    await requireCapability({
+      capability: 'PROCESS_EXECUTION',
+      action: 'skill.exec',
+      requester: 'agent',
+      summary: `run a program from the skill "${slug}"`,
+      detail: `Command: ${commandLine}\nWorking folder: the "${slug}" skill folder\n\nThis runs with your user account's permissions.`,
+      scopeKey: `skill.exec:${slug}:${commandLine}`,
+    });
+  } catch (error) {
+    if (isCapabilityDenied(error)) return { ok: false, denied: true, error: error.message };
+    throw error;
+  }
+  audit({ event: 'process.exec', capability: 'PROCESS_EXECUTION', action: 'skill.exec', target: `${slug}: ${binary}` });
   const timeout = Math.min(Math.max(body.timeout ?? 60_000, 1_000), MAX_TIMEOUT_MS);
   try {
     const result = await execFileAsync(binary, args, {

@@ -12,8 +12,12 @@ export async function runDesktopSmokeProbe(
   origin: string,
   win: BrowserWindow,
   render: boolean,
+  cookieHeader = '',
 ): Promise<void> {
-  const res = await fetch(`${origin}/api/keys`);
+  // The embedded server only answers the Electron session (desktop/embedded-request-gate.ts);
+  // main-process probes present the same session cookie.
+  const sessionHeaders: Record<string, string> = cookieHeader ? { Cookie: cookieHeader } : {};
+  const res = await fetch(`${origin}/api/keys`, { headers: sessionHeaders });
   if (!res.ok) throw new Error(`/api/keys → HTTP ${res.status}`);
   const mcp = await fetch(`${origin}/api/external-mcp/mcp`, {
     method: 'POST',
@@ -100,6 +104,7 @@ export async function runDesktopSmokeProbe(
         'Content-Type': 'application/json',
         Origin: origin,
         'Sec-Fetch-Site': 'same-origin',
+        ...sessionHeaders,
       },
       body: JSON.stringify({ state, frames: [0] }),
       signal: AbortSignal.timeout(RENDER_DEADLINE_MS),

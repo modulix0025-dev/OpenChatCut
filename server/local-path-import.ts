@@ -1,11 +1,17 @@
 // Agent-initiated local-path import (issue #84 Feature B). Unlike directory
 // watches, which wait passively for files to appear, this runs a one-shot
-// scan/import of explicitly requested paths. Local access is enabled by default;
-// an explicit AGENT_IMPORT_ROOTS value optionally restricts it.
+// scan/import of explicitly requested paths.
+//
+// Least privilege: the agent (and external MCP clients) may only reach folders
+// the user granted through the native folder picker, recorded in
+// AGENT_IMPORT_ROOTS. With no grant, every path is refused with
+// IMPORT_ROOTS_NOT_CONFIGURED so the desktop can ask the user for a folder.
 import { basename, dirname, isAbsolute } from 'node:path';
 import { realpath, stat, readdir } from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
 import { getKey } from './keystore.ts';
+import { unsafeLocalPathReason } from './security/local-path-safety.ts';
+import { audit } from './security/audit-log.ts';
 import type {
   AgentPathImportRequest,
   AgentPathImportError,
@@ -61,14 +67,27 @@ function outsideRootsError(path: string, roots: readonly string[]): AgentPathImp
 
 export async function resolveAgentMediaPath(path: string): Promise<string> {
   if (!isAbsolute(path) || path.includes('\0')) throw new Error('path must be an absolute local path');
+  const unsafe = unsafeLocalPathReason(path);
+  if (unsafe) {
+    // UNC / device / alternate-stream paths would make the OS contact a
+    // network share or open a device before any containment check runs.
+    audit({ event: 'path.rejected', capability: 'FILES_READ', action: 'agent.local-path', target: path, detail: unsafe });
+    throw Object.assign(new Error(`path is not allowed (${unsafe})`), { code: 'UNSAFE_PATH' });
+  }
   const configuredRoots = authorizedRoots();
-  const roots = configuredRoots.length ? await canonicalRoots(configuredRoots) : [];
-  if (configuredRoots.length && !pathAllowedByRoots(configuredRoots, path) && !pathAllowedByRoots(roots, path)) {
+  if (!configuredRoots.length) {
+    throw Object.assign(
+      new Error('No local media folder has been granted to the agent yet. Ask the user to choose a folder.'),
+      { code: 'IMPORT_ROOTS_NOT_CONFIGURED' },
+    );
+  }
+  const roots = await canonicalRoots(configuredRoots);
+  if (!pathAllowedByRoots(configuredRoots, path) && !pathAllowedByRoots(roots, path)) {
     const error = outsideRootsError(path, configuredRoots);
     throw Object.assign(new Error(error.error), { code: error.code });
   }
   const canonicalPath = await realpath(path);
-  if (configuredRoots.length && !pathAllowedByRoots(roots, canonicalPath)) {
+  if (!pathAllowedByRoots(roots, canonicalPath)) {
     const error = outsideRootsError(path, configuredRoots);
     throw Object.assign(new Error(error.error), { code: error.code });
   }
@@ -95,8 +114,9 @@ async function planCandidates(paths: readonly string[]): Promise<{
       info = await stat(canonicalPath);
     } catch (error) {
       errors.push({ path, error: error instanceof Error ? error.message : String(error),
-        ...(error instanceof Error && 'code' in error && error.code === 'PATH_OUTSIDE_IMPORT_ROOTS'
-          ? { code: 'PATH_OUTSIDE_IMPORT_ROOTS' as const } : {}),
+        ...(error instanceof Error && 'code' in error
+          && (error.code === 'PATH_OUTSIDE_IMPORT_ROOTS' || error.code === 'IMPORT_ROOTS_NOT_CONFIGURED')
+          ? { code: error.code as 'PATH_OUTSIDE_IMPORT_ROOTS' | 'IMPORT_ROOTS_NOT_CONFIGURED' } : {}),
       });
       continue;
     }
@@ -112,7 +132,9 @@ async function planCandidates(paths: readonly string[]): Promise<{
         errors.push({ path, error: error instanceof Error ? error.message : String(error) });
       }
     } else if (info.isFile()) {
-      candidates.push({ path: canonicalPath, name: basename(path), root: dirname(canonicalPath) });
+      // The media kind comes from the file that is actually read, so a link
+      // named "x.svg" cannot smuggle an arbitrary target in as an image.
+      candidates.push({ path: canonicalPath, name: basename(canonicalPath), root: dirname(canonicalPath) });
     } else {
       errors.push({ path, error: 'not a file or directory' });
     }

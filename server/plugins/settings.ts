@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
-import { keyStatus, setKeys } from '../keystore.ts';
+import { getKey, keyStatus, redactUrlCredentials, setKeys } from '../keystore.ts';
+import { authorizeProbeOverrides, authorizeSettingsPatch, type DirectorySetting } from '../security/settings-guard.ts';
+import { isCapabilityDenied } from '../security/capabilities.ts';
 import { runProbe } from '../key-probes.ts';
 import {
   checkMediaDir,
@@ -157,6 +159,7 @@ export function settingsPlugin(): Plugin {
             const overrides = body.overrides && typeof body.overrides === 'object' && !Array.isArray(body.overrides)
               ? body.overrides as Record<string, unknown>
               : {};
+            await authorizeProbeOverrides(overrides, (name) => getKey(name as never));
             sendJson(res, 200, await runProbe(page, overrides));
             return;
           }
@@ -164,6 +167,28 @@ export function settingsPlugin(): Plugin {
             const profile = runtimeProfile();
             const patch = await readBody(req);
             assertProfileSensitiveSettingsPatch(patch, profile);
+            // GET /api/keys shows PROXY_URL as scheme://***@host; saving the form
+            // unchanged must keep the stored credentials, not store "***".
+            if (typeof patch.PROXY_URL === 'string' && patch.PROXY_URL.includes('://***@')) {
+              const stored = getKey('PROXY_URL' as never);
+              if (redactUrlCredentials(stored) === patch.PROXY_URL.trim()) patch.PROXY_URL = stored;
+              else throw new Error('re-enter the proxy credentials to change the proxy address');
+            }
+            // Redirecting stored keys to a new host or moving user data needs
+            // the user's explicit confirmation (native prompt on desktop).
+            const directories: DirectorySetting[] = [];
+            if (Object.hasOwn(patch, DATA_DIR_ENV)) {
+              const requested = expandDataDir(String(patch[DATA_DIR_ENV] ?? ''));
+              directories.push({ name: DATA_DIR_ENV, label: 'your projects', current: profile.rootDir, requested: requested ?? defaultRootDir(profile) });
+            }
+            if ('MEDIA_DIR' in patch) {
+              directories.push({ name: 'MEDIA_DIR', label: 'your media library', current: uploadDir(profile), requested: expandMediaDir(String(patch.MEDIA_DIR ?? '')) ?? profile.mediaDir });
+            }
+            if ('OPENCHATCUT_SKILLS_DIR' in patch) {
+              const requested = String(patch.OPENCHATCUT_SKILLS_DIR ?? '').trim();
+              directories.push({ name: 'OPENCHATCUT_SKILLS_DIR', label: 'your skills', current: getKey('OPENCHATCUT_SKILLS_DIR' as never).trim(), requested: requested || null });
+            }
+            await authorizeSettingsPatch(patch, (name) => getKey(name as never), directories);
             // The storage root is not a keystore key (the keystore lives inside
             // it): handle and strip it before setKeys sees the patch.
             let dataDirChanged = false;
@@ -196,7 +221,7 @@ export function settingsPlugin(): Plugin {
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           server.config.logger.error(`[settings] ${message}`);  // message only — never a key value
-          if (!res.headersSent) sendJson(res, 400, { error: message });
+          if (!res.headersSent) sendJson(res, isCapabilityDenied(error) ? 403 : 400, { error: message });
         }
       });
     },

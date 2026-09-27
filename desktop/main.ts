@@ -1,5 +1,5 @@
 import './chdir-first.ts';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -29,9 +29,15 @@ import { detectDesktopHardwareProfile } from './native-hardware-profile.ts';
 import { installDirectoryWatchIpc } from './directory-watch-ipc.ts';
 import {
   AGENT_IMPORT_ROOTS_KEY,
+  appendAgentImportRoot,
   importAgentPathsWithGrant,
 } from '../server/local-path-import.ts';
 import { getKey, setKeys } from '../server/keystore.ts';
+import { registerCapabilityPrompter, SECURITY_DIR_ENV } from '../server/security/capabilities.ts';
+import { audit, AUDIT_LOG_DIR_ENV } from '../server/security/audit-log.ts';
+import { isSafeLocalPath } from '../server/security/local-path-safety.ts';
+import { createNativeCapabilityPrompter } from './capability-prompt.ts';
+import { createDesktopSessionSecret, installDesktopSecurityPolicy } from './security-policy.ts';
 import { AGENT_PATH_IMPORT_CHANNEL } from '../shared/directory-import.ts';
 import { AGENT_LOCAL_MEDIA_CHANNEL } from '../shared/agent-local-media.ts';
 import { browseLocalMedia } from '../server/agent-local-media.ts';
@@ -50,7 +56,7 @@ import {
   packagedRuntimeAssetChecks,
   runtimeAssetFailure,
 } from './runtime-preflight.ts';
-import { ffmpegBin } from '../server/media-binaries.ts';
+import { ffmpegBin, PACKAGED_RUNTIME_ENV } from '../server/media-binaries.ts';
 import { focusExistingWindow } from './single-instance.ts';
 import { requestProfileScopedSingleInstanceLock } from './runtime-profile.ts';
 import { applyDesktopWindowFrame, desktopWindowFrameOptions } from './window-frame.ts';
@@ -81,6 +87,9 @@ import {
 // Electron main process entry. dev mode: esbuild hits desktop-dist/main.mjs,dist/ in the codebase root;
 // Packaging form: dist/, resonance-bundle, chrome-headless-shell use extraResources.
 // The V8 heap ceiling is raised in desktop/bootstrap.ts, which runs before this bundle loads.
+// Packaged builds execute only bundled binaries (server/media-binaries.ts).
+if (app.isPackaged) process.env[PACKAGED_RUNTIME_ENV] = '1';
+
 const DIST_DIR = app.isPackaged
   ? join(process.resourcesPath, 'dist')
   : join(fileURLToPath(new URL('..', import.meta.url)), 'dist');
@@ -95,6 +104,18 @@ let mainWindow: BrowserWindow | null = null;
 
 type DesktopIpcHandler = Parameters<typeof ipcMain.handle>[1];
 
+/** package.json `openchatcut.directUpdates` — false for unsigned builds (desktop/update-service.ts). */
+function directUpdatesAllowedByBuild(): boolean {
+  try {
+    const manifest = JSON.parse(readFileSync(join(app.getAppPath(), 'package.json'), 'utf8')) as {
+      openchatcut?: { directUpdates?: unknown };
+    };
+    return manifest.openchatcut?.directUpdates === true;
+  } catch {
+    return false;
+  }
+}
+
 function trustedDesktopHandler(
   trustedOrigin: string,
   handler: DesktopIpcHandler,
@@ -107,12 +128,16 @@ function trustedDesktopHandler(
 
 function handOffExternalUrl(decision: DesktopPageUrlDecision): void {
   if (decision.action !== 'open-external') return;
+  audit({ event: 'navigation.blocked', action: 'open-external', target: decision.url, detail: 'opened in the system browser' });
   void shell.openExternal(decision.url).catch((error: unknown) => {
     console.error('[desktop] failed to open external URL:', error);
   });
 }
 
 function agentImportPickerDefaultPath(requestedPath: string): string {
+  // Never stat a UNC/device path an agent supplied: touching \\host\share makes
+  // Windows authenticate to that host.
+  if (!isSafeLocalPath(requestedPath)) return app.getPath('videos');
   try {
     return existsSync(requestedPath) && statSync(requestedPath).isDirectory()
       ? requestedPath
@@ -130,6 +155,7 @@ function installDesktopPageGuards(win: BrowserWindow, trustedOrigin: string): vo
     const decision = resolveDesktopPageUrlDecision(requestedUrl, trustedOrigin, surface);
     if (decision.action === 'allow') return;
     event.preventDefault();
+    if (decision.action === 'deny') audit({ event: 'navigation.blocked', action: surface, target: requestedUrl });
     handOffExternalUrl(decision);
   };
 
@@ -145,7 +171,7 @@ function installDesktopPageGuards(win: BrowserWindow, trustedOrigin: string): vo
 function registerDesktopHandlers(trustedOrigin: string): void {
   ipcMain.handle('openchatcut:select-directory', trustedDesktopHandler(trustedOrigin, async (event, requestedPath: unknown) => {
     const parent = BrowserWindow.fromWebContents(event.sender);
-    const requested = typeof requestedPath === 'string' && isAbsolute(requestedPath)
+    const requested = typeof requestedPath === 'string' && isAbsolute(requestedPath) && isSafeLocalPath(requestedPath)
       ? requestedPath
       : app.getPath('videos');
     const options: OpenDialogOptions = {
@@ -247,6 +273,14 @@ function registerDesktopHandlers(trustedOrigin: string): void {
         preload: PRELOAD_PATH,
         contextIsolation: true,
         nodeIntegration: false,
+        nodeIntegrationInWorker: false,
+        nodeIntegrationInSubFrames: false,
+        sandbox: true,
+        webSecurity: true,
+        allowRunningInsecureContent: false,
+        webviewTag: false,
+        navigateOnDragDrop: false,
+        devTools: !app.isPackaged,
         spellcheck: false,
         // The editor bridge heartbeat is a timer-driven long poll; without
         // this, Electron throttles background windows and the MCP bridge
@@ -328,6 +362,12 @@ function registerDesktopHandlers(trustedOrigin: string): void {
 
 async function boot(): Promise<void> {
   await app.whenReady();
+  // Security state lives with the app's own data, not in a shared location.
+  process.env[AUDIT_LOG_DIR_ENV] ??= join(app.getPath('userData'), 'logs');
+  process.env[SECURITY_DIR_ENV] ??= join(app.getPath('userData'), 'security');
+  // Every privileged action the server, agent or MCP clients attempt is
+  // confirmed through this OS-drawn dialog (server/security/capabilities.ts).
+  registerCapabilityPrompter(createNativeCapabilityPrompter(() => mainWindow));
   if (app.isPackaged) {
     const missing = missingRuntimeAssets(packagedRuntimeAssetChecks({
       resourcesPath: process.resourcesPath,
@@ -348,20 +388,47 @@ async function boot(): Promise<void> {
     packaged: app.isPackaged,
     smoke: SMOKE,
   });
-  const origin = devOrigin ?? (await startEmbeddedServer(DIST_DIR)).origin;
+  const sessionSecret = createDesktopSessionSecret();
+  const origin = devOrigin ?? (await startEmbeddedServer(DIST_DIR, { sessionSecret })).origin;
+  const securityPolicy = await installDesktopSecurityPolicy({
+    origin,
+    sessionSecret,
+    enforceCsp: devOrigin === null,
+  });
   registerDesktopHandlers(origin);
   installProjectStoreIpc(origin);
   installEditorAuthIpc(origin);
   installDesktopUpdateIpc(origin, {
     enabled: supportsDirectDesktopUpdates({
+      directUpdatesAllowed: directUpdatesAllowedByBuild(),
       packaged: app.isPackaged,
       smoke: SMOKE,
       platform: process.platform,
     }),
   });
   installDirectoryWatchIpc(origin);
-  ipcMain.handle(AGENT_LOCAL_MEDIA_CHANNEL, trustedDesktopHandler(origin,
-    async (_event, request: unknown) => browseLocalMedia(request)));
+  ipcMain.handle(AGENT_LOCAL_MEDIA_CHANNEL, trustedDesktopHandler(origin, async (event, request: unknown) => {
+    try {
+      return await browseLocalMedia(request);
+    } catch (error) {
+      const code = (error as { code?: unknown })?.code;
+      if (code !== 'IMPORT_ROOTS_NOT_CONFIGURED' && code !== 'PATH_OUTSIDE_IMPORT_ROOTS') throw error;
+      // Least privilege: the agent sees only folders the user picks here.
+      const requested = (request as { path?: unknown })?.path;
+      const parent = BrowserWindow.fromWebContents(event.sender);
+      const options: OpenDialogOptions = {
+        title: '选择允许 Agent 访问的素材文件夹 / Choose a folder the agent may browse',
+        defaultPath: agentImportPickerDefaultPath(typeof requested === 'string' ? requested : app.getPath('videos')),
+        properties: ['openDirectory'],
+      };
+      const selected = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options);
+      const root = selected.canceled ? null : selected.filePaths[0];
+      if (!root) throw error;
+      await setKeys({ [AGENT_IMPORT_ROOTS_KEY]: appendAgentImportRoot(getKey(AGENT_IMPORT_ROOTS_KEY as never), root) });
+      audit({ event: 'capability.granted', capability: 'FILES_READ', action: 'agent.import-root', decision: 'folder-picker', target: root });
+      return browseLocalMedia(typeof requested === 'string' ? request : { ...(request as object), path: root });
+    }
+  }));
   ipcMain.handle(AGENT_PATH_IMPORT_CHANNEL, trustedDesktopHandler(origin, async (event, request: unknown) => {
     const value = request as { paths?: unknown; projectId?: unknown; knownHashes?: unknown };
     const paths = Array.isArray(value?.paths)
@@ -420,6 +487,14 @@ async function boot(): Promise<void> {
       preload: PRELOAD_PATH,
       contextIsolation: true,
       nodeIntegration: false,
+      nodeIntegrationInWorker: false,
+      nodeIntegrationInSubFrames: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      webviewTag: false,
+      navigateOnDragDrop: false,
+      devTools: !app.isPackaged,
       spellcheck: false,
       // Same heartbeat reasoning as the transcript window above.
       backgroundThrottling: false,
@@ -442,7 +517,7 @@ async function boot(): Promise<void> {
   await win.loadURL(`${origin}/`);
 
   if (SMOKE) {
-    await runDesktopSmokeProbe(origin, win, SMOKE_RENDER);
+    await runDesktopSmokeProbe(origin, win, SMOKE_RENDER, securityPolicy.cookieHeader);
     console.log('SMOKE-OK');
     exitSmoke(0);
   }

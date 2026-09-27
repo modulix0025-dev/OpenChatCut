@@ -4,6 +4,7 @@
 // are merged atomically (write-to-temp + rename) and never clobbered when the
 // existing content fails to parse.
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -75,8 +76,16 @@ function displayPath(baseDir: string, file: string): string {
 
 async function writeAtomic(file: string, text: string): Promise<void> {
   await mkdir(path.dirname(file), { recursive: true });
-  const tmp = `${file}.occ-connect-tmp`;
-  await writeFile(tmp, text, 'utf8');
+  // These files receive the MCP bearer token: keep the original file's mode
+  // when it is already private, and never create one wider than owner-only.
+  let mode = 0o600;
+  try {
+    mode = (await stat(file)).mode & 0o700;
+  } catch {
+    // New file: owner read/write only.
+  }
+  const tmp = `${file}.occ-connect-${randomUUID()}.tmp`;
+  await writeFile(tmp, text, { encoding: 'utf8', mode: mode || 0o600, flag: 'wx' });
   await rename(tmp, file);
 }
 

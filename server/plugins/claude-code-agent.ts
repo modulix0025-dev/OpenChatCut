@@ -176,14 +176,22 @@ function claudeCodeModels(): ClaudeCodeAgentModelsResponse {
   return { models: CURATED_MODELS };
 }
 
+/** A CLI argument value that cannot be parsed as an option. */
+export function cliToken(value: string, field: string): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:@[\]/-]{0,127}$/.test(value)) throw new Error(`invalid ${field}`);
+  return value;
+}
+
 function parseClaudeCodeTurnRequest(body: Record<string, unknown>): ClaudeCodeTurnRequest {
   return {
     requestId: shortString(body.requestId, 'requestId', 128),
     system: typeof body.system === 'string' ? body.system.slice(0, 1024 * 1024) : '',
     prompt: shortString(body.prompt, 'prompt', 2 * 1024 * 1024),
     projectId: shortString(body.projectId, 'projectId', 256),
-    ...(typeof body.model === 'string' && body.model ? { model: body.model } : {}),
-    ...(typeof body.sessionId === 'string' && body.sessionId ? { sessionId: body.sessionId } : {}),
+    // Both become CLI argument values; a value starting with "-" would be read
+    // by the Claude CLI as another option (e.g. --settings with hooks).
+    ...(typeof body.model === 'string' && body.model ? { model: cliToken(body.model, 'model') } : {}),
+    ...(typeof body.sessionId === 'string' && body.sessionId ? { sessionId: cliToken(body.sessionId, 'sessionId') } : {}),
     ...(body.approvalMode === 'auto' || body.approvalMode === 'manual'
       ? { approvalMode: body.approvalMode } : {}),
   };

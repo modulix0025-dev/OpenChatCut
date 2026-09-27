@@ -48,13 +48,14 @@ export async function ensureWritableBundle({ resourcesPath, userDataPath, versio
 /** Configure packaged render assets before the first rendering request. */
 export async function preparePackagedRuntime(paths: PackagedPaths): Promise<void> {
   process.env.CC_REMOTION_BUNDLE = await ensureWritableBundle(paths);
+  // Packaged builds only execute the render binaries they ship: inherited
+  // CC_BROWSER_EXECUTABLE / CC_REMOTION_BINARIES_DIR values are discarded.
   const browser = findBundledBrowser(join(paths.resourcesPath, 'chrome-headless-shell'));
   if (browser) process.env.CC_BROWSER_EXECUTABLE = browser;
-  if (!process.env.CC_REMOTION_BINARIES_DIR) {
-    // A real, writable copy of the compositor: the archive cannot be chmod'ed or spawned.
-    process.env.CC_REMOTION_BINARIES_DIR = await ensureRemotionBinaries({
-      userDataPath: paths.userDataPath,
-      version: paths.version,
-    });
-  }
+  else delete process.env.CC_BROWSER_EXECUTABLE;
+  // A real, writable copy of the compositor: the archive cannot be chmod'ed or spawned.
+  process.env.CC_REMOTION_BINARIES_DIR = await ensureRemotionBinaries({
+    userDataPath: paths.userDataPath,
+    version: paths.version,
+  });
 }
