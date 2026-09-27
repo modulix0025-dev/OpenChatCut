@@ -68,6 +68,12 @@ async function createHarness(): Promise<{
 }> {
   const { resetExternalAgentBrokerForTest } = await import('./broker.ts');
   const { handleMcpRequest, resetMcpSessionsForTest } = await import('./mcp.ts');
+  // Each worker process stands in for a user who granted this client
+  // auto-approval (MCP_TOOLS) for the session.
+  const { registerCapabilityPrompter } = await import('../security/capabilities.ts');
+  const { setAuditSinkForTests } = await import('../security/audit-log.ts');
+  setAuditSinkForTests(() => undefined);
+  registerCapabilityPrompter(async () => 'allow-session');
   const server = createServer((req, res) => {
     void handleMcpRequest(req, res, 'http://127.0.0.1').catch((error) => {
       if (!res.headersSent) res.writeHead(500);

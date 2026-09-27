@@ -18,7 +18,7 @@ for (const name of ['import_asset', 'import_folder']) {
   const pathProp = properties['path'] as { type?: string } | undefined;
   assert.equal(pathProp?.type, 'string', `${name} path is a string`);
   assert.ok((schema!.input_schema as { required?: string[] }).required?.includes('path'), `${name} requires path`);
-  assert.match(schema!.description ?? '', /AGENT_IMPORT_ROOTS/, `${name} documents the whitelist`);
+  assert.match(schema!.description ?? '', /granted through the folder picker/, `${name} documents the folder grant`);
 }
 
 // ── Browser (window exists, no desktop bridge): clear desktop-only error ──

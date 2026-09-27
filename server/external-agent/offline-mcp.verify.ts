@@ -71,6 +71,11 @@ const {
   resetMcpSessionsForTest,
 } = await import('./mcp.ts');
 
+const { registerCapabilityPrompter, resetCapabilityStateForTests, SECURITY_DIR_ENV } = await import('../security/capabilities.ts');
+const { setAuditSinkForTests } = await import('../security/audit-log.ts');
+process.env[SECURITY_DIR_ENV] = join(root, 'security');
+setAuditSinkForTests(() => undefined);
+
 const projectId = 'offline-mcp-project';
 await setStoredEntry(`project:${projectId}`, projectDoc());
 await setStoredEntry('projects', [{ id: projectId, name: 'Offline MCP', updatedAt: 1 }]);
@@ -109,6 +114,19 @@ try {
   const manual = await client.callTool({ name: 'begin_edit_session', arguments: { approvalMode: 'manual' } });
   assert.equal(manual.isError, true);
   assert.equal(resultField(manual, 'outcome'), 'rejected');
+
+  // Auto-approval disables per-action confirmation, so only the user can grant
+  // it: without a permission prompt the request is refused.
+  resetCapabilityStateForTests();
+  const unapproved = await client.callTool({ name: 'begin_edit_session', arguments: { approvalMode: 'auto' } });
+  assert.equal(unapproved.isError, true);
+  assert.match(JSON.stringify(unapproved.structuredContent), /Permission denied/);
+  resetCapabilityStateForTests();
+  registerCapabilityPrompter(async (request) => {
+    assert.equal(request.capability, 'MCP_TOOLS');
+    assert.equal(request.requester, 'external-mcp');
+    return 'allow-session';
+  });
 
   const begin = await client.callTool({ name: 'begin_edit_session', arguments: { approvalMode: 'auto' } });
   const editSessionId = sessionId(begin);

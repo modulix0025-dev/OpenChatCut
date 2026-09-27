@@ -47,16 +47,16 @@ await writeFile(join(importRoot, '剪辑说明.md'), '# 文稿');
 const uploadDir = await canonicalCurrentUploadDirectory();
 const cleanup = new Set<string>();
 try {
-  // Local paths are available without a folder grant by default.
+  // Least privilege: without a folder the user granted, nothing is imported
+  // and the error code asks the desktop to show the folder picker.
   seedKeystore({ AGENT_IMPORT_ROOTS: '' });
   const unconfigured = await importAgentPaths({
     paths: [sourcePath],
     projectId: 'verify-project',
     knownHashes: [],
   });
-  assert.equal(unconfigured.errors.length, 0);
-  assert.equal(unconfigured.imported.length, 1, 'default access imports without a folder picker');
-  for (const file of unconfigured.imported) cleanup.add(mediaReferenceManifestPath(uploadDir, file.storedName));
+  assert.equal(unconfigured.imported.length, 0, 'no folder grant → no import');
+  assert.equal(unconfigured.errors[0]?.code, 'IMPORT_ROOTS_NOT_CONFIGURED', 'the grant flow is requested');
 
   seedKeystore({ AGENT_IMPORT_ROOTS: importRoot });
 

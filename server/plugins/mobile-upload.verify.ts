@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import type { MobileUploadSessionSnapshot } from '../mobile-upload-service';
 import { handleMobileUploadControl } from './mobile-upload';
+import { registerCapabilityPrompter, resetCapabilityStateForTests } from '../security/capabilities';
+import { setAuditSinkForTests } from '../security/audit-log';
 
 const snapshot: MobileUploadSessionSnapshot = {
   id: 'a',
@@ -39,7 +41,21 @@ const address = server.address();
 assert.ok(address && typeof address === 'object');
 const origin = `http://127.0.0.1:${address.port}`;
 
+setAuditSinkForTests(() => undefined);
 try {
+  // Exposing an upload page on the LAN is a NETWORK_ACCESS capability: denied
+  // unless the user allows it.
+  resetCapabilityStateForTests();
+  const denied = await fetch(`${origin}/sessions?locale=en`, {
+    method: 'POST',
+    headers: { origin },
+  });
+  assert.equal(denied.status, 403, 'no permission prompt → the LAN listener is not opened');
+  assert.equal(creates, 0);
+  registerCapabilityPrompter(async (request) => {
+    assert.equal(request.capability, 'NETWORK_ACCESS');
+    return 'allow-session';
+  });
   const created = await fetch(`${origin}/sessions?locale=en`, {
     method: 'POST',
     headers: { origin },

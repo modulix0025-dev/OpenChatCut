@@ -65,6 +65,17 @@ function outsideRootsError(path: string, roots: readonly string[]): AgentPathImp
   };
 }
 
+let callerSuppliedPathsTrusted = false;
+
+/**
+ * For the `occ` command line only: a path the user typed in their own terminal
+ * is their explicit choice, so folder grants do not apply (unsafe path shapes
+ * are still refused). The desktop app and the MCP server never call this.
+ */
+export function trustCallerSuppliedLocalPaths(): void {
+  callerSuppliedPathsTrusted = true;
+}
+
 export async function resolveAgentMediaPath(path: string): Promise<string> {
   if (!isAbsolute(path) || path.includes('\0')) throw new Error('path must be an absolute local path');
   const unsafe = unsafeLocalPathReason(path);
@@ -74,6 +85,7 @@ export async function resolveAgentMediaPath(path: string): Promise<string> {
     audit({ event: 'path.rejected', capability: 'FILES_READ', action: 'agent.local-path', target: path, detail: unsafe });
     throw Object.assign(new Error(`path is not allowed (${unsafe})`), { code: 'UNSAFE_PATH' });
   }
+  if (callerSuppliedPathsTrusted) return realpath(path);
   const configuredRoots = authorizedRoots();
   if (!configuredRoots.length) {
     throw Object.assign(

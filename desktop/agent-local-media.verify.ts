@@ -10,7 +10,13 @@ import { isAgentLocalMediaRequest } from '../shared/agent-local-media.ts';
 const fixture = await mkdtemp(join(tmpdir(), 'occ-local-media-'));
 const root = await realpath(fixture);
 try {
+  // Least privilege: with no granted folder, nothing is browsable.
   seedKeystore({ AGENT_IMPORT_ROOTS: '' });
+  await assert.rejects(browseLocalMedia({ path: root }), (error: { code?: string }) => error.code === 'IMPORT_ROOTS_NOT_CONFIGURED');
+  await assert.rejects(browseLocalMedia({}), (error: { code?: string }) => error.code === 'IMPORT_ROOTS_NOT_CONFIGURED',
+    'the home directory is not browsable by default');
+  // The user grants this folder through the desktop folder picker.
+  seedKeystore({ AGENT_IMPORT_ROOTS: root });
   await mkdir(join(root, 'Interview'));
   await writeFile(join(root, 'A.MP4'), 'media listing does not decode bytes');
   await writeFile(join(root, 'B.wav'), 'audio');
@@ -35,7 +41,7 @@ try {
     assert.equal(isAgentLocalMediaRequest(value), false);
     await assert.rejects(browseLocalMedia(value), /invalid/);
   }
-  assert.equal(await resolveAgentMediaPath(root), root, 'no roots means local access by default');
+  assert.equal(await resolveAgentMediaPath(root), root, 'a granted folder is reachable');
   let deep = join(root, 'deep');
   for (let depth = 0; depth < 14; depth += 1) { await mkdir(deep); deep = join(deep, 'next'); }
   assert.equal((await browseLocalMedia({ path: root, recursive: true })).truncated, true);
@@ -60,4 +66,4 @@ try {
   seedKeystore({ AGENT_IMPORT_ROOTS: '' });
   await rm(fixture, { recursive: true, force: true });
 }
-console.log('agent-local-media.verify: default access, search, pagination, bounds and explicit restrictions passed');
+console.log('agent-local-media.verify: default deny, granted access, search, pagination, bounds and explicit restrictions passed');

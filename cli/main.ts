@@ -61,6 +61,22 @@ function reportError(error: unknown): number {
   return EXIT_FAILURE;
 }
 
+/**
+ * `occ` runs in the user's own terminal with the user's own account: the
+ * command line they typed IS the authorization. Paths named on it are trusted
+ * and privileged steps it triggers (e.g. capcut-cli) are allowed, with every
+ * decision still written to the security audit log. The desktop app and the
+ * MCP server never take this path; they use the native permission prompt.
+ */
+async function authorizeCommandLineUser(): Promise<void> {
+  const [{ trustCallerSuppliedLocalPaths }, { registerCapabilityPrompter }] = await Promise.all([
+    import('../server/local-path-import.ts'),
+    import('../server/security/capabilities.ts'),
+  ]);
+  trustCallerSuppliedLocalPaths();
+  registerCapabilityPrompter(async () => 'allow-once');
+}
+
 export async function run(argv: readonly string[]): Promise<number> {
   let commandLine;
   try {
@@ -88,6 +104,7 @@ export async function run(argv: readonly string[]): Promise<number> {
     // Dynamic on purpose: static import would load server/runtime-profile.ts (and
     // therefore freeze the profile) before --data-dir was applied above.
     const { runCommand } = await import('./router.ts');
+    await authorizeCommandLineUser();
     await runCommand(commandLine);
     return EXIT_OK;
   } catch (error) {
