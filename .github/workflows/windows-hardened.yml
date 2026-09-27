@@ -3,12 +3,17 @@
 # the packaged smoke test (which asserts the security boundaries in the running
 # app), then uploads both executables with SHA-256 checksums.
 #
-# Manual trigger only. No signing secrets are used or required; the output is
+# Manual trigger, plus pushes to the hardening branch that touch this file. No signing secrets are used or required; the output is
 # unsigned (see security/CODE_SIGNING.md).
 name: Windows hardened build
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - claude/eager-albattani-2tprvr
+    paths:
+      - '.github/workflows/windows-hardened.yml'
 
 permissions:
   contents: read
