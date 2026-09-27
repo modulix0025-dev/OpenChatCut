@@ -1,4 +1,5 @@
 import type { TranscriptWord } from '../transcript/types';
+import { t } from '../i18n/locale';
 
 const TIMECODE = /^(\d{1,3}):([0-5]\d):([0-5]\d)[,.](\d{1,3})\s*-->\s*(\d{1,3}):([0-5]\d):([0-5]\d)[,.](\d{1,3})(?:\s+.*)?$/;
 
@@ -48,6 +49,6 @@ export function parseSrt(source: string): TranscriptWord[] {
     const end = milliseconds(match[5]!, match[6]!, match[7]!, match[8]!);
     if (end > start) cues.push({ text, start, end });
   }
-  if (!cues.length) throw new Error('SRT 文件中没有有效字幕。');
+  if (!cues.length) throw new Error(t('SRT 文件中没有有效字幕。'));
   return cues.sort((a, b) => a.start - b.start || a.end - b.end);
 }

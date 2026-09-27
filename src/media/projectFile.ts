@@ -1,4 +1,5 @@
 import type { MediaAsset } from '../editor/types';
+import { t } from '../i18n/locale';
 
 export type ProjectDocumentKind = 'text' | 'docx' | 'pdf';
 
@@ -32,17 +33,17 @@ export function projectFileAssetKind(file: Pick<File, 'name' | 'type'>): 'docume
 }
 
 export function assertProjectDocumentSize(byteLength: number): void {
-  if (byteLength > PROJECT_DOCUMENT_MAX_BYTES) throw new Error('文档大小不能超过 10 MB');
+  if (byteLength > PROJECT_DOCUMENT_MAX_BYTES) throw new Error(t('文档大小不能超过 10 MB'));
 }
 
 export function assertProjectDocumentPageCount(pageCount: number): void {
-  if (pageCount > PROJECT_PDF_MAX_PAGES) throw new Error('PDF 页数不能超过 100 页');
+  if (pageCount > PROJECT_PDF_MAX_PAGES) throw new Error(t('PDF 页数不能超过 100 页'));
 }
 
 export function validatedProjectDocumentText(text: string): string {
   const trimmed = text.trim();
   if (trimmed.length > PROJECT_DOCUMENT_MAX_TEXT_CHARS) {
-    throw new Error('文档文本不能超过 100,000 个字符');
+    throw new Error(t('文档文本不能超过 100,000 个字符'));
   }
   return trimmed;
 }
@@ -84,7 +85,7 @@ export async function readProjectDocument(file: File): Promise<string> {
   if (kind === 'docx') return parseDocxText(await file.arrayBuffer());
   if (kind === 'pdf') return parsePdfText(await file.arrayBuffer());
   if (kind === 'text') return validatedProjectDocumentText(await file.text());
-  throw new Error('此文件不是可读取的文档');
+  throw new Error(t('此文件不是可读取的文档'));
 }
 
 export function projectDocumentPromptBlock(name: string, text: string): string {
@@ -128,7 +129,7 @@ export async function readProjectAssetDocument(
   asset: Pick<MediaAsset, 'name' | 'sourceFilename' | 'src'>,
 ): Promise<string> {
   const response = await fetch(asset.src);
-  if (!response.ok) throw new Error(`读取文档失败 (${response.status})`);
+  if (!response.ok) throw new Error(t('读取文档失败 ({status})', { status: response.status }));
   const blob = await response.blob();
   const name = asset.sourceFilename ?? asset.name;
   const file = new File([blob], name, { type: blob.type });

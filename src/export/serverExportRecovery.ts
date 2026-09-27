@@ -21,6 +21,7 @@ import {
   projectStoreWriteCredential,
   requestProjectStore,
 } from '../persist/projectStoreTransport';
+import { t } from '../i18n/locale';
 
 export {
   hasServerExportDestinationAuthority,
@@ -86,7 +87,7 @@ export async function persistServerExportJob(record: PersistedServerExportJob): 
   if (projectStoreWriteCredential()) {
     try {
       const canonical = await reconcileRemoteRecord(record);
-      if (!canonical) throw new RetiredExportRecoveryError('导出恢复记录已退役');
+      if (!canonical) throw new RetiredExportRecoveryError(t('导出恢复记录已退役'));
       remoteSaved = true;
       if (localSaved) await writeLocalRecord(joinRemoteRecord(canonical, record));
     } catch (error) {
@@ -101,7 +102,7 @@ export async function persistServerExportJob(record: PersistedServerExportJob): 
     localSaved = true;
   }
   if (requiresLocalAuthority && !localSaved) {
-    throw localError instanceof Error ? localError : new Error('无法保存浏览器导出目标授权');
+    throw localError instanceof Error ? localError : new Error(t('无法保存浏览器导出目标授权'));
   }
 }
 
@@ -138,14 +139,14 @@ async function transitionServerExportStage(
       ownerInstanceId: deliveryOwnerId,
       ...(claim ? { leaseToken: claim.leaseToken } : {}),
     }));
-    if (!result.accepted) throw new Error('导出恢复阶段已变更');
+    if (!result.accepted) throw new Error(t('导出恢复阶段已变更'));
     const local = await readLocalRecord(renderId);
     if (local && validRecord(result.value)) {
       await writeLocalRecord(joinRemoteRecord(result.value, local));
     }
     return;
   }
-  if (!await updateLocalStage(renderId, stage, claim)) throw new Error('无法持久化导出恢复阶段');
+  if (!await updateLocalStage(renderId, stage, claim)) throw new Error(t('无法持久化导出恢复阶段'));
 }
 
 export const markServerExportOutputReady = (
@@ -281,11 +282,11 @@ export async function rebindServerExportJob(
   targetPath: string,
   claim: ServerExportDeliveryClaim,
 ): Promise<PersistedServerExportJob> {
-  if (!await checkServerExportDelivery(renderId, claim)) throw new Error('导出恢复目标绑定已失效');
+  if (!await checkServerExportDelivery(renderId, claim)) throw new Error(t('导出恢复目标绑定已失效'));
   const current = await recoveryRecordById(renderId);
   if (!current || (current.stage !== 'polling' && current.stage !== 'output-ready'
     && current.stage !== 'delivery-ambiguous')) {
-    throw new Error('保留的导出结果已不可恢复');
+    throw new Error(t('保留的导出结果已不可恢复'));
   }
   const next: PersistedServerExportJob = {
     ...current,
@@ -306,17 +307,17 @@ export async function rebindServerExportJob(
       value: remoteSafeRecord(next),
     }));
     if (!result.accepted || !validRecord(result.value)) {
-      throw new Error('导出恢复目标绑定已失效');
+      throw new Error(t('导出恢复目标绑定已失效'));
     }
     const canonical = joinRemoteRecord(result.value, next);
     if (browserDestination(destination) || await readLocalRecord(renderId)) {
       await writeLocalRecord(canonical);
     }
-    if (!await checkServerExportDelivery(renderId, claim)) throw new Error('导出恢复目标绑定已失效');
+    if (!await checkServerExportDelivery(renderId, claim)) throw new Error(t('导出恢复目标绑定已失效'));
     return canonical;
   }
   await writeLocalRecord(next);
-  if (!await checkServerExportDelivery(renderId, claim)) throw new Error('导出恢复目标绑定已失效');
+  if (!await checkServerExportDelivery(renderId, claim)) throw new Error(t('导出恢复目标绑定已失效'));
   return next;
 }
 

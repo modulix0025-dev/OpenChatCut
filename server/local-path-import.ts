@@ -37,7 +37,7 @@ function parseAuthorizedRoots(raw: string): string[] {
 
 export function appendAgentImportRoot(raw: string, root: string): string {
   const clean = root.trim();
-  if (!clean || /[\r\n,]/.test(clean)) throw new Error('所选目录名称不能包含逗号或换行符');
+  if (!clean || /[\r\n,]/.test(clean)) throw new Error('The selected directory name must not contain commas or line breaks');
   return [...new Set([...parseAuthorizedRoots(raw), clean])].join(',');
 }
 

@@ -14,6 +14,7 @@ import {
   VAD_MODEL_VERSION,
 } from './vad';
 import { vadSilenceRemovalEnabled } from './vadPreference';
+import { t } from '../i18n/locale';
 
 // ── Pure function (node-testable) ────────────────────────────────────────────
 
@@ -136,7 +137,7 @@ export async function analyzeClipSilence(
   const { installSileroVad } = await import('./silero-vad');
   installSileroVad();
   const res = await fetch(src, { signal: context.signal });
-  if (!res.ok) throw new Error(`加载音频失败: ${src} (HTTP ${res.status})`);
+  if (!res.ok) throw new Error(t('加载音频失败: {src} (HTTP {status})', { src, status: res.status }));
   const arrayBuffer = await res.arrayBuffer();
   const audioContext = new OfflineAudioContext(1, 1, 44100);
   const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);

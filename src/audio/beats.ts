@@ -3,6 +3,8 @@
 // Pure DSP, zero model dependence, node testable; suitable for soundtracks/BGM with a stable rhythm (please segment the variable speed tracks).
 // The splitting style is the same as loudness/silence: pure function + browser decoding glue.
 
+import { t } from '../i18n/locale';
+
 export interface BeatAnalysis {
   /** 0 = No credible beat detected */
   bpm: number;
@@ -228,7 +230,7 @@ function mixToMono(buffer: AudioBuffer): Float32Array {
 /** Pull source → offline decoding → mix mono → beat analysis (source seconds). Browser only. */
 export async function analyzeAssetBeats(src: string): Promise<BeatAnalysis> {
   const res = await fetch(src);
-  if (!res.ok) throw new Error(`加载音频失败: ${src} (HTTP ${res.status})`);
+  if (!res.ok) throw new Error(t('加载音频失败: {src} (HTTP {status})', { src, status: res.status }));
   const arrayBuffer = await res.arrayBuffer();
   const ctx = new OfflineAudioContext(1, 1, 44100);
   const audioBuffer = await ctx.decodeAudioData(arrayBuffer);

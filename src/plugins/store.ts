@@ -8,6 +8,7 @@ import { pluginAssetId, type PluginFxItem, type PluginLutItem, type PluginPack, 
 import type { SerializableFxDef } from '../gl/fx/uniforms';
 import type { CustomTransitionDef } from '../gl/customTransitions';
 import { registerCustomZoom, unregisterCustomZoom } from '../editor/customZooms';
+import { t } from '../i18n/locale';
 
 const DB_NAME = 'openchatcut';
 const STORE = 'kv';
@@ -142,7 +143,7 @@ async function requestServer(path = '', init?: RequestInit): Promise<Response> {
   const response = await fetch(`${API_PATH}${path}`, init);
   if (!response.ok) {
     const body = await response.json().catch(() => null) as { error?: string } | null;
-    throw new Error(body?.error ?? `扩展存储请求失败 (${response.status})`);
+    throw new Error(body?.error ?? t('扩展存储请求失败 ({status})', { status: response.status }));
   }
   return response;
 }
@@ -280,7 +281,7 @@ export function lutDefOf(pack: PluginPack, item: PluginLutItem, cubeUrl: string,
 }
 
 export function lutShaderDefOf(pack: PluginPack, item: PluginLutItem): SerializableFxDef {
-  if (!item.frag) throw new Error(`LUT「${item.name}」缺少 frag`);
+  if (!item.frag) throw new Error(t('LUT「{name}」缺少 frag', { name: item.name }));
   return {
     id: pluginAssetId(pack.id, item.id),
     name: item.name,

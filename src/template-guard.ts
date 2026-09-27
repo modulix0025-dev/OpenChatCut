@@ -1,6 +1,6 @@
 // Capability guard for code-backed templates (see template-host.ts for the
-// layered model). Kept free of React/Remotion imports so it can be verified in
-// plain Node.
+// layered model). Kept free of React/Remotion rendering imports so it can be
+// verified in plain Node (only the i18n t() helper is imported).
 //
 // A template may only name identifiers it declares itself, the injected
 // template API, or the pure built-ins below. Everything else — `window`,
@@ -10,6 +10,8 @@
 // global object, the Function constructor, or the rest of the editor DOM, so
 // they are refused as literal names and, for computed access, by a runtime
 // guard that runs after the key has been converted to its final string.
+
+import { t } from './i18n/locale';
 
 /** Runtime key guard injected into the evaluated template scope. */
 export const TEMPLATE_KEY_GUARD = '__occTemplateKey';
@@ -110,7 +112,7 @@ export interface BabelLike {
 }
 
 function fail(reason: string): never {
-  throw new Error(`sandbox 拒绝：${reason}`);
+  throw new Error(t('sandbox 拒绝：{reason}', { reason }));
 }
 
 function checkStaticKey(key: BabelNode | undefined, computed: boolean): void {

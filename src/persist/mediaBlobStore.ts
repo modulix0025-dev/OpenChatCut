@@ -7,6 +7,7 @@ import {
   serverPathIsAuthoritative, sha256Blob, mediaExtension, serverMediaHash,
   isSpaFallback, uploadPathForRecord, uploadMediaBlob,
 } from './mediaBlobUpload';
+import { t } from '../i18n/locale';
 export { resetMediaBlobMemory } from './mediaBlobDatabase';
 export type { MediaBlobRecord, MediaBlobWriteMeta } from './mediaBlobDatabase';
 export { uploadAssetIdFromSrc } from './mediaBlobUpload';
@@ -100,7 +101,7 @@ export async function deleteMediaBlob(src: string): Promise<void> {
 }
 function assertMediaImportNamespace(namespace: string): void {
   if (!namespace.startsWith(MEDIA_IMPORT_PREFIX) || !namespace.endsWith('/')) {
-    throw new Error('媒体导入临时命名空间无效');
+    throw new Error(t('媒体导入临时命名空间无效'));
   }
 }
 
@@ -140,7 +141,7 @@ async function allocateImportedMediaSrc(
     const candidate = `/media/uploads/import-${importId}-${index.toString(36)}-${sha256.slice(0, 24)}${extension}`;
     if (await mediaIdentityState(candidate, sha256) !== 'conflict') return candidate;
   }
-  throw new Error('无法分配隔离的工程包媒体名称');
+  throw new Error(t('无法分配隔离的工程包媒体名称'));
 }
 
 /** Allocate an opaque namespace whose records cannot collide with real media src keys. */
@@ -163,9 +164,9 @@ export async function stageMediaBlobImport(
   meta?: MediaBlobWriteMeta,
 ): Promise<StagedMediaBlobImportEntry> {
   assertMediaImportNamespace(namespace);
-  if (!packageSrc.startsWith('/media/uploads/')) throw new Error('工程包媒体 src 无效');
+  if (!packageSrc.startsWith('/media/uploads/')) throw new Error(t('工程包媒体 src 无效'));
   const bytes = data.size;
-  if (bytes <= 0 || bytes > MAX_TOTAL_CACHE_BYTES) throw new Error('工程包媒体大小无效');
+  if (bytes <= 0 || bytes > MAX_TOTAL_CACHE_BYTES) throw new Error(t('工程包媒体大小无效'));
   const sha256 = await sha256Blob(data);
   const name = meta?.name ?? (
     typeof File !== 'undefined' && data instanceof File
@@ -179,7 +180,7 @@ export async function stageMediaBlobImport(
     const previousBytes = existing.find((record) => record.src === tempSrc)?.bytes ?? 0;
     if (existing.reduce((total, record) => total + record.bytes, 0) - previousBytes + bytes
       > MAX_TOTAL_CACHE_BYTES) {
-      throw new Error('工程包媒体临时存储空间不足');
+      throw new Error(t('工程包媒体临时存储空间不足'));
     }
     const timestamp = Date.now();
     await idbPut({
@@ -221,7 +222,7 @@ async function rollbackPublishedMedia(
       failures.push(error);
     }
   }
-  if (failures.length) throw new AggregateError(failures, '工程包媒体真实键回滚未完整完成');
+  if (failures.length) throw new AggregateError(failures, t('工程包媒体真实键回滚未完整完成'));
 }
 
 async function clearPublishedMediaIdentity(publication: MediaBlobImportPublication): Promise<void> {
@@ -239,11 +240,11 @@ async function clearPublishedMediaIdentity(publication: MediaBlobImportPublicati
       failures.push(error);
     }
   }
-  if (failures.length) throw new AggregateError(failures, '工程包媒体发布标识清理未完整完成');
+  if (failures.length) throw new AggregateError(failures, t('工程包媒体发布标识清理未完整完成'));
 }
 async function deleteImportedServerMedia(created: CreatedServerMediaPublication): Promise<void> {
   if (!created.src.startsWith('/media/uploads/')) {
-    throw new Error(`工程包 server 媒体路径无效: ${created.src}`);
+    throw new Error(t('工程包 server 媒体路径无效: {src}', { src: created.src }));
   }
   const name = created.src.slice('/media/uploads/'.length);
   const query = new URLSearchParams({ name, rollbackToken: created.rollbackToken });
@@ -268,7 +269,7 @@ export async function commitMediaBlobImport(publication: MediaBlobImportPublicat
   } catch (error) {
     failures.push(error);
   }
-  if (failures.length) throw new AggregateError(failures, '工程包媒体提交清理未完整完成');
+  if (failures.length) throw new AggregateError(failures, t('工程包媒体提交清理未完整完成'));
 }
 
 /** CAS-delete import-owned keys, conditionally delete import-owned server media, and remove temporary records. */
@@ -291,7 +292,7 @@ export async function rollbackMediaBlobImport(publication: MediaBlobImportPublic
   } catch (error) {
     failures.push(error);
   }
-  if (failures.length) throw new AggregateError(failures, '工程包媒体回滚或清理未完整完成');
+  if (failures.length) throw new AggregateError(failures, t('工程包媒体回滚或清理未完整完成'));
 }
 
 /**
@@ -310,16 +311,16 @@ export async function publishMediaBlobImport(
   try {
     for (const entry of entries) {
       if (seen.has(entry.src) || entry.tempSrc !== mediaImportKey(namespace, entry.src)) {
-        throw new Error(`工程包媒体发布清单无效: ${entry.src}`);
+        throw new Error(t('工程包媒体发布清单无效: {src}', { src: entry.src }));
       }
       seen.add(entry.src);
       const staged = await enqueueSourceWrite(entry.tempSrc, () => idbGet(entry.tempSrc));
-      if (!staged) throw new Error(`工程包媒体临时条目缺失: ${entry.src}`);
+      if (!staged) throw new Error(t('工程包媒体临时条目缺失: {src}', { src: entry.src }));
       const created = await enqueueSourceWrite(entry.src, async () => {
         const previous = await idbGet(entry.src);
         if (previous) {
           if (await sha256Blob(previous.blob) !== entry.sha256) {
-            throw new Error(`工程包媒体目标已被不同内容占用: ${entry.src}`);
+            throw new Error(t('工程包媒体目标已被不同内容占用: {src}', { src: entry.src }));
           }
           return false;
         }
@@ -336,13 +337,13 @@ export async function publishMediaBlobImport(
       });
       published.push({ ...entry, created });
       if (await sha256Blob(staged.blob) !== entry.sha256) {
-        throw new Error(`工程包媒体临时条目哈希不匹配: ${entry.src}`);
+        throw new Error(t('工程包媒体临时条目哈希不匹配: {src}', { src: entry.src }));
       }
       const record = { ...staged, src: entry.src };
       const existingServerHash = await serverMediaHash(entry.src);
       if (existingServerHash !== null) {
         if (existingServerHash !== entry.sha256) {
-          throw new Error(`工程包 server 媒体目标已被不同内容占用: ${entry.src}`);
+          throw new Error(t('工程包 server 媒体目标已被不同内容占用: {src}', { src: entry.src }));
         }
         continue;
       }
@@ -354,14 +355,14 @@ export async function publishMediaBlobImport(
       if (!uploaded.created) {
         createdServerMedia.pop();
         if (await serverMediaHash(uploaded.path) !== entry.sha256) {
-          throw new Error(`工程包 server 媒体目标竞争冲突: ${uploaded.path}`);
+          throw new Error(t('工程包 server 媒体目标竞争冲突: {path}', { path: uploaded.path }));
         }
       }
       if (uploaded.created && uploaded.rollbackToken !== rollbackToken) {
-        throw new Error(`工程包 server 媒体 rollback token 不匹配: ${uploaded.path}`);
+        throw new Error(t('工程包 server 媒体 rollback token 不匹配: {path}', { path: uploaded.path }));
       }
       if (uploaded.path !== entry.src) {
-        throw new Error(`工程包媒体未按安全 src 发布: ${entry.src}`);
+        throw new Error(t('工程包媒体未按安全 src 发布: {src}', { src: entry.src }));
       }
     }
     return { namespace, entries: published, createdServerMedia };
@@ -369,7 +370,7 @@ export async function publishMediaBlobImport(
     try {
       await rollbackMediaBlobImport({ namespace, entries: published, createdServerMedia });
     } catch (rollbackError) {
-      throw new AggregateError([error, rollbackError], '工程包媒体发布失败，回滚或清理未完整完成');
+      throw new AggregateError([error, rollbackError], t('工程包媒体发布失败，回滚或清理未完整完成'));
     }
     throw error;
   }

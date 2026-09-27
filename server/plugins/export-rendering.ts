@@ -119,7 +119,7 @@ export async function renderExportPlan(
       cleanupStatus,
       targetPath: filepath,
       message: oom
-        ? '导出时内存不足。请关闭其他程序、缩短导出范围或降低分辨率后重试；若仍失败，重启应用后再试。'
+        ? 'Ran out of memory during export. Close other programs, shorten the export range, or lower the resolution and try again; if it still fails, restart the app and retry.'
         : message,
     }));
   }

@@ -19,6 +19,7 @@ import { backgroundFillStrengthOf, isBackgroundFillActive } from '../editor/back
 import type { ExportMediaSourceMap, ExportMediaStart } from '../../shared/export-media-sources';
 import { planAssetMedia, type AssetMedia } from './fcpxmlMedia';
 import { mediaStartTime, mediaTime, rationalTime, retimedClipTimes, timecodeFormatAttr } from './fcpxmlTime';
+import { t } from '../i18n/locale';
 
 export { resolveAssetAbsPath, resolveAssetSrc } from './fcpxmlMedia';
 
@@ -63,20 +64,20 @@ function sanitizeId(raw: string): string {
 
 function validateState(state: TimelineState): void {
   if (!state || !Array.isArray(state.items)) {
-    throw new Error('timelineToFcpxml: state.items 必须是数组');
+    throw new Error(t('timelineToFcpxml: state.items 必须是数组'));
   }
   if (!Number.isFinite(state.fps) || state.fps <= 0) {
-    throw new Error('timelineToFcpxml: state.fps 必须是正数');
+    throw new Error(t('timelineToFcpxml: state.fps 必须是正数'));
   }
   if (!Number.isInteger(state.width) || state.width <= 0 || !Number.isInteger(state.height) || state.height <= 0) {
-    throw new Error('timelineToFcpxml: state.width/height 必须是正整数');
+    throw new Error(t('timelineToFcpxml: state.width/height 必须是正整数'));
   }
   for (const item of state.items) {
     if (!Number.isInteger(item.startFrame) || item.startFrame < 0) {
-      throw new Error(`timelineToFcpxml: item ${item.id} 的 startFrame 非法`);
+      throw new Error(t('timelineToFcpxml: item {id} 的 startFrame 非法', { id: item.id }));
     }
     if (!Number.isInteger(item.durationInFrames) || item.durationInFrames <= 0) {
-      throw new Error(`timelineToFcpxml: item ${item.id} 的 durationInFrames 非法`);
+      throw new Error(t('timelineToFcpxml: item {id} 的 durationInFrames 非法', { id: item.id }));
     }
   }
 }

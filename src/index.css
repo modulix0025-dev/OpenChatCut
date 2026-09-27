@@ -2117,3 +2117,22 @@ button, input, select { font: inherit; }
 .cc-preview-text-edit-draft textarea:focus {
   border-color:color-mix(in srgb, var(--cc-accent) 50%, var(--cc-border));
 }
+
+/* Right-to-left locales (Arabic): menus, panels, dialogs and text mirror via
+   dir="rtl" on <html>. Time still runs left to right, as in every editor, so
+   the timeline, preview stage, transport and scopes keep LTR geometry. */
+[dir="rtl"] .cc-timeline,
+[dir="rtl"] .cc-timeline-ruler,
+[dir="rtl"] .cc-timeline-transport,
+[dir="rtl"] .cc-timeline-timecode,
+[dir="rtl"] .cc-preview-stage,
+[dir="rtl"] .cc-preview-workspace,
+[dir="rtl"] .cc-clip-wave,
+[dir="rtl"] canvas,
+[dir="rtl"] video { direction: ltr; }
+[dir="rtl"] .cc-timeline-clip,
+[dir="rtl"] .cc-clip-label { unicode-bidi: plaintext; }
+[dir="rtl"] input[type="number"],
+[dir="rtl"] code,
+[dir="rtl"] pre { direction: ltr; unicode-bidi: isolate; }
+

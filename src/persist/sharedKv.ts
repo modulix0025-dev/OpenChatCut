@@ -28,6 +28,7 @@ import {
   requestEntry, requestMerge, requestMutation, requestProjectDocumentMutation,
   requestSnapshot, validMutationResponse, type EntryResponse,
 } from './sharedKvRequests';
+import { t } from '../i18n/locale';
 export type { SharedKvBackend } from './sharedKvLocal';
 type AgentRuntimeWriteRequest = Extract<ProjectStoreRequest, { operation: 'agent-runtime-write' }>;
 type AgentRunLeaseRequest = Extract<ProjectStoreRequest, { operation: 'agent-run-lease' }>;
@@ -291,7 +292,7 @@ async function setProjectDocument(key: string, value: unknown): Promise<void> {
   const local = await localGet<unknown>(key);
   if (!ownership && local !== undefined) {
     ownership = await waitForBrowserProjectOwnership(projectId);
-    if (!ownership) throw new Error('工程编辑权尚未注册，工程未保存');
+    if (!ownership) throw new Error(t('工程编辑权尚未注册，工程未保存'));
   }
   const request: ProjectDocumentWriteRequest = ownership
     ? {
@@ -312,7 +313,7 @@ async function setProjectDocument(key: string, value: unknown): Promise<void> {
   }
   if (!result.accepted) {
     await cacheMutation(key, result);
-    throw new Error('工程已被其他编辑器更新，请手动刷新页面后重试');
+    throw new Error(t('工程已被其他编辑器更新，请手动刷新页面后重试'));
   }
   if (!result.found || typeof result.currentRevision !== 'string') {
     throw new Error('invalid successful project document CAS response');
@@ -339,13 +340,13 @@ export async function kvSet(key: string, value: unknown): Promise<void> {
     return;
   }
   if (!projectStoreWriteCredential()) {
-    throw new Error('共享工程库为只读模式（未连接编辑器会话），修改未同步');
+    throw new Error(t('共享工程库为只读模式（未连接编辑器会话），修改未同步'));
   }
   try {
     await requestProjectStore({ operation: 'set', key, value });
   } catch (error) {
     if (isAuthError(error)) {
-      throw new Error('共享工程库只读（编辑器会话失效），修改未同步');
+      throw new Error(t('共享工程库只读（编辑器会话失效），修改未同步'));
     }
     await disableRemote();
     await localSet(key, value);
@@ -366,18 +367,18 @@ export async function kvDel(key: string): Promise<void> {
   // Node memory fallback (no IndexedDB) keeps local semantics for checks.
   const requireSharedDelete = isProjectDocumentKey(key) && (canSync() || hasIdb());
   if (!remoteCache) {
-    if (requireSharedDelete) throw new Error('共享工程数据库暂时不可用，工程未删除');
+    if (requireSharedDelete) throw new Error(t('共享工程数据库暂时不可用，工程未删除'));
     await localDel(key);
     return;
   }
   if (isProjectDocumentKey(key) && !projectStoreWriteCredential()) {
-    throw new Error('共享工程库为只读模式（未连接编辑器会话），工程未删除');
+    throw new Error(t('共享工程库为只读模式（未连接编辑器会话），工程未删除'));
   }
   try {
     await requestProjectStore({ operation: 'delete', key });
   } catch (error) {
     if (isAuthError(error) && isProjectDocumentKey(key)) {
-      throw new Error('共享工程库只读（编辑器会话失效），工程未删除');
+      throw new Error(t('共享工程库只读（编辑器会话失效），工程未删除'));
     }
     await disableRemote();
     if (requireSharedDelete) throw error;
@@ -409,7 +410,7 @@ export async function kvPurgeProject(projectId: string): Promise<void> {
   await ready();
   const requireSharedDelete = canSync();
   if (!remoteCache) {
-    if (requireSharedDelete) throw new Error('共享工程数据库暂时不可用，工程未删除');
+    if (requireSharedDelete) throw new Error(t('共享工程数据库暂时不可用，工程未删除'));
     await purgeLocalProjectEntries(projectId);
     return;
   }

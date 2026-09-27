@@ -9,6 +9,8 @@
 // blocks should also be culled). For steady/quasi-steady assets (speech, music) the error is usually within a few LUFS, which is sufficient
 // Rough judgment on "whether to increase gain/how much to increase"; assets containing large sections of silence + sudden loudness will deviate more.
 // Upgrade path: Connect K-weighting biquad filter + relative threshold, align with ITU-R BS.1770-4 full process.
+import { t } from '../i18n/locale';
+
 export function integratedLoudnessFromSamples(samples: Float32Array, sampleRate: number): number {
   if (samples.length === 0 || sampleRate <= 0) return -70; // Empty/illegal input → Silence lower limit, do not return NaN
   const blockSize = Math.max(1, Math.round(sampleRate * 0.4)); // BS.1770 gating block = 400ms
@@ -55,7 +57,7 @@ function mixToMono(buffer: AudioBuffer): Float32Array {
  * →Measure integrated loudness. Browser-specific; it should not be adjusted in the node environment (OfflineAudioContext does not exist). */
 export async function analyzeClipLoudness(src: string): Promise<number> {
   const res = await fetch(src);
-  if (!res.ok) throw new Error(`加载音频失败: ${src} (HTTP ${res.status})`);
+  if (!res.ok) throw new Error(t('加载音频失败: {src} (HTTP {status})', { src, status: res.status }));
   const arrayBuffer = await res.arrayBuffer();
   // The length is just a placeholder; the actual sampling rate/number of channels is subject to the decoding result of decodeAudioData.
   const ctx = new OfflineAudioContext(1, 1, 44100);

@@ -1,4 +1,5 @@
 import { DIRECTORY_PERMISSION, isBrowserDirectoryHandle, safeDirectoryLabel, type BrowserExportDirectoryHandle, type ExportDestination } from './exportDestinationModel';
+import { t } from '../i18n/locale';
 
 interface PromiseResolvers<T> {
   promise: Promise<T>;
@@ -22,16 +23,16 @@ function openDestinationDatabase(): Promise<IDBDatabase> {
     }
   };
   request.onsuccess = () => resolve(request.result);
-  request.onerror = () => reject(request.error ?? new Error('无法打开导出目录存储'));
-  request.onblocked = () => reject(new Error('导出目录存储被其他页面占用'));
+  request.onerror = () => reject(request.error ?? new Error(t('无法打开导出目录存储')));
+  request.onblocked = () => reject(new Error(t('导出目录存储被其他页面占用')));
   return promise;
 }
 
 function transactionComplete(transaction: IDBTransaction): Promise<void> {
   const { promise, resolve, reject } = promiseConstructor.withResolvers<void>();
   transaction.oncomplete = () => resolve(undefined);
-  transaction.onerror = () => reject(transaction.error ?? new Error('无法保存导出目录'));
-  transaction.onabort = () => reject(transaction.error ?? new Error('导出目录保存已取消'));
+  transaction.onerror = () => reject(transaction.error ?? new Error(t('无法保存导出目录')));
+  transaction.onabort = () => reject(transaction.error ?? new Error(t('导出目录保存已取消')));
   return promise;
 }
 
@@ -43,7 +44,7 @@ async function readBrowserDirectory(): Promise<BrowserExportDirectoryHandle | nu
     const request = transaction.objectStore(STORE_NAME).get(LAST_BROWSER_DIRECTORY_KEY);
     const { promise, resolve, reject } = promiseConstructor.withResolvers<unknown>();
     request.onsuccess = () => resolve(request.result as unknown);
-    request.onerror = () => reject(request.error ?? new Error('无法读取导出目录'));
+    request.onerror = () => reject(request.error ?? new Error(t('无法读取导出目录')));
     const value = await promise;
     return isBrowserDirectoryHandle(value) ? value : null;
   } catch {

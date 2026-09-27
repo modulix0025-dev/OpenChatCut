@@ -8,7 +8,7 @@ assert.equal(storageGroup.title, '默认工程位置');
 assert.deepEqual(
   storageGroup.vendors.filter((vendor) => vendor.vendor === 'localdisk')
     .flatMap((vendor) => vendor.fields.map((field) => field.name)),
-  ['OPENCHATCUT_DATA_DIR'],
+  ['OPENCHATCUT_DATA_DIR', 'MEDIA_IMPORT_MODE'],
   'the UI must expose one default project location instead of separate media/import roots',
 );
 assert.equal(

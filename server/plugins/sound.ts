@@ -296,7 +296,7 @@ export function soundGenerationPlugin(options: SoundOptions): Plugin {
           const raw = await readJson(req);
           const input = validate(raw);
           if (input.provider === 'sonilo') {
-            if (!options.soniloApiKey) throw new Error('Sonilo is not configured. Set SONILO_API_KEY in .env.local or 设置面板.');
+            if (!options.soniloApiKey) throw new Error('Sonilo is not configured. Set SONILO_API_KEY in .env.local or in Settings.');
             const submitArgs = Object.fromEntries(Object.entries(raw).filter(([key]) => key !== 'operationId'));
             const submission = await createGenerationJob(
               { kind: 'sound', model: 'v1', ...input },

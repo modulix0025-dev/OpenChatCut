@@ -212,7 +212,7 @@ export async function speechifyVoice(options: VoiceOptions, input: ValidVoiceReq
 }
 
 export async function minimaxVoice(options: VoiceOptions, input: ValidVoiceRequest): Promise<MinimaxVoiceResult> {
-  if (!options.minimaxApiKey) throw new Error('MiniMax is not configured. Set MINIMAX_API_KEY in .env.local or 设置面板.');
+  if (!options.minimaxApiKey) throw new Error('MiniMax is not configured. Set MINIMAX_API_KEY in .env.local or in Settings.');
   const body = minimaxVoiceBody(options.minimaxModel, input);
   const response = await fetchWithProxy(`${options.minimaxBaseUrl.replace(/\/$/, '')}/v1/t2a_v2`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${options.minimaxApiKey}` }, body: JSON.stringify(body),

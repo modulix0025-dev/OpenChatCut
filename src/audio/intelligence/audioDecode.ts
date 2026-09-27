@@ -1,3 +1,5 @@
+import { t } from '../../i18n/locale';
+
 const MAX_SOURCE_BYTES = 512 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 3 * 60_000;
 const METADATA_TIMEOUT_MS = 30_000;
@@ -167,7 +169,7 @@ async function decodeBytes(
     // memory, so an oversized or un-decodable long audio surfaces here instead
     // of crashing the tab. Tell the user it is a size/resource limit, not a bug.
     throw new Error(
-      '无法分析的音频：文件过大或浏览器内存不足。请裁剪为较短的片段后再分析。'
+      t('无法分析的音频：文件过大或浏览器内存不足。请裁剪为较短的片段后再分析。')
       + ` (${error instanceof Error ? error.message : String(error)})`,
     );
   } finally {

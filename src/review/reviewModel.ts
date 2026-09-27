@@ -1,5 +1,6 @@
 import type { TimelineItem, TimelineState } from '../editor/types';
 import { sourceFrameAt } from '../editor/sourceLimit';
+import { t } from '../i18n/locale';
 
 export interface ReviewRegion {
   x: number;
@@ -106,8 +107,8 @@ export function reviewAnchor(
 
 function cleanText(value: string): string {
   const text = value.trim();
-  if (!text) throw new Error('评论内容不能为空');
-  if (text.length > MAX_TEXT_LENGTH) throw new Error(`评论不能超过 ${MAX_TEXT_LENGTH} 个字符`);
+  if (!text) throw new Error(t('评论内容不能为空'));
+  if (text.length > MAX_TEXT_LENGTH) throw new Error(t('评论不能超过 {n} 个字符', { n: MAX_TEXT_LENGTH }));
   return text;
 }
 

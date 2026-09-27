@@ -18,6 +18,7 @@ import {
   kvGetFresh,
   kvSet,
 } from './sharedKv';
+import { t } from '../i18n/locale';
 
 const localWriteGenerations = new Map<string, string>();
 const lastReadGenerations = new Map<string, string>();
@@ -93,7 +94,7 @@ export async function rotateAgentSessionGeneration(projectId: string): Promise<s
   let record: AgentSessionGenerationRecord;
   if (projectStoreRemoteAvailable()) {
     if (!projectStoreWriteCredential()) {
-      throw new Error('共享工程库为只读模式（未连接编辑器会话），Agent 上下文未清理');
+      throw new Error(t('共享工程库为只读模式（未连接编辑器会话），Agent 上下文未清理'));
     }
     const response = await requestProjectStore({
       operation: 'agent-session-rotate',

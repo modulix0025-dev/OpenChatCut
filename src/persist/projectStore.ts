@@ -487,7 +487,7 @@ const newId = () =>
     ? crypto.randomUUID()
     : `p_${now().toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}`;
 
-const LOCALE_TAGS: Record<ReturnType<typeof getLocale>, string> = { zh: 'zh-CN', en: 'en-GB', it: 'it-IT', ru: 'ru-RU' };
+const LOCALE_TAGS: Record<ReturnType<typeof getLocale>, string> = { zh: 'zh-CN', en: 'en-GB', it: 'it-IT', ru: 'ru-RU', ar: 'ar-EG-u-nu-latn' };
 
 /** Default name for a new project, in the interface language, with the date
  *  and time so it is recognizable in the list (it used to be a random Chinese

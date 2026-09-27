@@ -44,12 +44,19 @@ async function fetchDicts(locale: Locale): Promise<LocaleDicts> {
     return { ui: en.EN, uiFallback: EMPTY, data: enData.default, dataFallback: EMPTY };
   }
   if (locale === 'ru') {
-    // Russian UI has no English fallback (untranslated keys stay Chinese), but
-    // its data names come from the English table, matching tData() before.
-    const [ru, enData] = await Promise.all([
-      import('./dict/ru'), import('./dict/en/templates-data'),
+    // Untranslated Russian keys fall back to English, never to the Chinese
+    // key; data names come from the English table.
+    const [ru, en, enData] = await Promise.all([
+      import('./dict/ru'), import('./dict/en'), import('./dict/en/templates-data'),
     ]);
-    return { ui: ru.RU, uiFallback: EMPTY, data: enData.default, dataFallback: EMPTY };
+    return { ui: ru.RU, uiFallback: en.EN, data: enData.default, dataFallback: EMPTY };
+  }
+  if (locale === 'ar') {
+    const [ar, arData, en, enData] = await Promise.all([
+      import('./dict/ar'), import('./dict/ar/templates-data'),
+      import('./dict/en'), import('./dict/en/templates-data'),
+    ]);
+    return { ui: ar.AR, uiFallback: en.EN, data: arData.default, dataFallback: enData.default };
   }
   const [it, itData, en, enData] = await Promise.all([
     import('./dict/it'), import('./dict/it/templates-data'),

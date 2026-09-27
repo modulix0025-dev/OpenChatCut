@@ -183,7 +183,7 @@ function registerDesktopHandlers(trustedOrigin: string): void {
       : await dialog.showOpenDialog(options);
     if (result.canceled || !result.filePaths[0]) return null;
     const directory = await validatedDirectory(result.filePaths[0]);
-    if (!directory) throw new Error('所选导出目录不可用');
+    if (!directory) throw new Error('The selected export directory is unavailable');
     const grant = createExportDirectoryGrant(directory);
     activeExportDirectory = { directory, grant };
     await persistExportDirectory(exportStatePath, directory, grant.grantId);
@@ -206,9 +206,9 @@ function registerDesktopHandlers(trustedOrigin: string): void {
       : await dialog.showSaveDialog(options);
     if (result.canceled || !result.filePath) return null;
     const filename = basename(result.filePath);
-    if (!validDesktopExportFilename(filename)) throw new Error('导出文件名无效');
+    if (!validDesktopExportFilename(filename)) throw new Error('Invalid export filename');
     const directory = await validatedDirectory(dirname(result.filePath));
-    if (!directory) throw new Error('所选导出目录不可用');
+    if (!directory) throw new Error('The selected export directory is unavailable');
     const grant = createExportDirectoryGrant(directory);
     activeExportDirectory = { directory, grant };
     await persistExportDirectory(exportStatePath, directory, grant.grantId);

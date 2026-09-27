@@ -302,7 +302,7 @@ async function generateHailuo(
   registerProviderTask: RegisterGenerationProviderTask,
   existingTaskId?: string,
 ): Promise<string> {
-  if (!options.minimaxApiKey) throw new Error('MiniMax is not configured. Set MINIMAX_API_KEY in .env.local or 设置面板.');
+  if (!options.minimaxApiKey) throw new Error('MiniMax is not configured. Set MINIMAX_API_KEY in .env.local or in Settings.');
   const baseUrl = options.minimaxBaseUrl.replace(/\/$/, '');
   const headers = { Authorization: `Bearer ${options.minimaxApiKey}`, 'Content-Type': 'application/json' };
   let taskId = existingTaskId;

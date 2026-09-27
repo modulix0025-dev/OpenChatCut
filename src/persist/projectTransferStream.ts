@@ -8,6 +8,7 @@ import { AgentRuntimeImportReader, agentRuntimeRecords } from './agentRuntimeTra
 import type { AgentRuntimeSnapshot } from './agentRuntimeStore';
 import type { PersistedChat } from './projectStore';
 import type { StoredProposalRecord } from './proposalStore';
+import { t } from '../i18n/locale';
 
 const MEDIA_PREFIX = '/media/uploads/';
 export const MAX_MEDIA_ENTRY_BYTES = 512 * 1024 * 1024;
@@ -67,10 +68,10 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 export function base64ToBytes(value: string): Uint8Array {
   if (!value || value.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(value)) {
-    throw new Error('工程包媒体 base64 数据损坏');
+    throw new Error(t('工程包媒体 base64 数据损坏'));
   }
   let binary: string;
-  try { binary = atob(value); } catch { throw new Error('工程包媒体 base64 数据损坏'); }
+  try { binary = atob(value); } catch { throw new Error(t('工程包媒体 base64 数据损坏')); }
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
   return bytes;
@@ -154,17 +155,17 @@ async function* textLines(blob: Blob): AsyncGenerator<string> {
       const { done, value } = await reader.read();
       if (done) break;
       pending += decoder.decode(value, { stream: true });
-      if (pending.length > MAX_STREAM_LINE_CHARS && !pending.includes('\n')) throw new Error('工程包记录超过单行上限');
+      if (pending.length > MAX_STREAM_LINE_CHARS && !pending.includes('\n')) throw new Error(t('工程包记录超过单行上限'));
       let newline = pending.indexOf('\n');
       while (newline >= 0) {
-        if (newline > MAX_STREAM_LINE_CHARS) throw new Error('工程包记录超过单行上限');
+        if (newline > MAX_STREAM_LINE_CHARS) throw new Error(t('工程包记录超过单行上限'));
         yield pending.slice(0, newline);
         pending = pending.slice(newline + 1);
         newline = pending.indexOf('\n');
       }
     }
     pending += decoder.decode();
-    if (pending.length > MAX_STREAM_LINE_CHARS) throw new Error('工程包记录超过单行上限');
+    if (pending.length > MAX_STREAM_LINE_CHARS) throw new Error(t('工程包记录超过单行上限'));
     if (pending) yield pending;
   } finally { reader.releaseLock(); }
 }
@@ -192,7 +193,7 @@ async function finishMediaEntry(
   namespace: string,
   current: { entry: ProjectMediaManifestEntry; parts: ArrayBuffer[]; bytes: number },
 ): Promise<StagedMediaBlobImportEntry> {
-  if (current.bytes !== current.entry.bytes) throw new Error(`工程包媒体大小不匹配: ${current.entry.name}`);
+  if (current.bytes !== current.entry.bytes) throw new Error(t('工程包媒体大小不匹配: {name}', { name: current.entry.name }));
   const blob = new Blob(current.parts, { type: current.entry.mime });
   return stageMediaBlobImport(namespace, current.entry.src, blob, {
     name: current.entry.name,
@@ -220,31 +221,31 @@ class StreamImportState {
       if (this.current) throw new Error('Agent runtime record interrupts a media entry.');
       return;
     }
-    if (!record || typeof record !== 'object' || Array.isArray(record)) throw new Error('工程包媒体记录不是对象');
+    if (!record || typeof record !== 'object' || Array.isArray(record)) throw new Error(t('工程包媒体记录不是对象'));
     const row = record as Record<string, unknown>;
     if (row.type === 'media-start') {
-      if (this.current) throw new Error('工程包媒体记录未结束');
+      if (this.current) throw new Error(t('工程包媒体记录未结束'));
       const entry = mediaManifestEntry(row);
-      if (!entry) throw new Error('工程包媒体条目校验不通过');
-      if (this.packageSrcs.has(entry.src)) throw new Error(`工程包媒体 src 重复: ${entry.src}`);
+      if (!entry) throw new Error(t('工程包媒体条目校验不通过'));
+      if (this.packageSrcs.has(entry.src)) throw new Error(t('工程包媒体 src 重复: {src}', { src: entry.src }));
       this.packageSrcs.add(entry.src);
       this.current = { entry, parts: [], bytes: 0 };
       return;
     }
     if (row.type === 'media-chunk') {
-      if (!this.current || typeof row.data !== 'string') throw new Error('工程包媒体分片顺序错误');
+      if (!this.current || typeof row.data !== 'string') throw new Error(t('工程包媒体分片顺序错误'));
       const bytes = base64ToBytes(row.data);
       this.current.bytes += bytes.byteLength;
-      if (this.current.bytes > this.current.entry.bytes) throw new Error(`工程包媒体大小超限: ${this.current.entry.name}`);
+      if (this.current.bytes > this.current.entry.bytes) throw new Error(t('工程包媒体大小超限: {name}', { name: this.current.entry.name }));
       this.current.parts.push(arrayBufferBlobPart(bytes));
       return;
     }
     if (row.type !== 'media-end' || !this.current || row.src !== this.current.entry.src) {
-      throw new Error(row.type === 'media-end' ? '工程包媒体结束记录不匹配' : '工程包含未知记录');
+      throw new Error(row.type === 'media-end' ? t('工程包媒体结束记录不匹配') : t('工程包含未知记录'));
     }
     const staged = await finishMediaEntry(this.namespace, this.current);
     const sameTarget = this.stagedByTarget.get(staged.src);
-    if (sameTarget && sameTarget.sha256 !== staged.sha256) throw new Error(`工程包媒体安全名称冲突: ${staged.src}`);
+    if (sameTarget && sameTarget.sha256 !== staged.sha256) throw new Error(t('工程包媒体安全名称冲突: {src}', { src: staged.src }));
     if (!sameTarget) { this.stagedByTarget.set(staged.src, staged); this.stagedEntries.push(staged); }
     this.replacements.set(this.current.entry.src, staged.src);
     this.mediaRestored += 1;
@@ -258,8 +259,8 @@ class StreamImportState {
       replacements: ReadonlyMap<string, string>,
     ) => StoredProposalRecord,
   ): Promise<StagedStreamProject> {
-    if (!this.manifest) throw new Error('工程包缺 manifest');
-    if (this.current) throw new Error('工程包媒体记录被截断');
+    if (!this.manifest) throw new Error(t('工程包缺 manifest'));
+    if (this.current) throw new Error(t('工程包媒体记录被截断'));
     const runtime = await this.runtimeReader.finish(
       this.manifest.chat,
       this.manifest.agentRuntime === true,
@@ -292,13 +293,13 @@ export async function stageProjectStream(
     for await (const line of textLines(file)) {
       if (!line) continue;
       let record: unknown;
-      try { record = JSON.parse(line); } catch { throw new Error('工程包记录不是合法 JSON'); }
+      try { record = JSON.parse(line); } catch { throw new Error(t('工程包记录不是合法 JSON')); }
       await state.consume(record, parseManifest);
     }
     return await state.finish(rewriteDoc, rewriteProposal);
   } catch (error) {
     try { await discardMediaBlobImport(state.namespace); }
-    catch (cleanupError) { throw new AggregateError([error, cleanupError], '工程包解析失败，临时媒体清理也失败'); }
+    catch (cleanupError) { throw new AggregateError([error, cleanupError], t('工程包解析失败，临时媒体清理也失败')); }
     throw error;
   }
 }

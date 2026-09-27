@@ -10,9 +10,12 @@ import { ensureLocaleDict, localeDictReady, localeDicts } from './dictRegistry';
 
 export { ensureLocaleDict } from './dictRegistry';
 
-export type Locale = 'zh' | 'en' | 'it' | 'ru';
+export type Locale = 'zh' | 'en' | 'it' | 'ru' | 'ar';
 
-export const ALL_LOCALES: readonly Locale[] = ['zh', 'en', 'it', 'ru'];
+export const ALL_LOCALES: readonly Locale[] = ['zh', 'en', 'it', 'ru', 'ar'];
+
+/** Locales written right to left. */
+export const RTL_LOCALES: ReadonlySet<Locale> = new Set<Locale>(['ar']);
 
 const STORAGE_KEY = 'cc.locale';
 const DOCUMENT_LANG: Record<Locale, string> = {
@@ -20,7 +23,15 @@ const DOCUMENT_LANG: Record<Locale, string> = {
   en: 'en',
   it: 'it',
   ru: 'ru',
+  ar: 'ar',
 };
+
+/** Set the document's language and writing direction for `locale`. */
+function applyDocumentLocale(locale: Locale): void {
+  if (typeof document === 'undefined') return;
+  document.documentElement.lang = DOCUMENT_LANG[locale];
+  document.documentElement.dir = RTL_LOCALES.has(locale) ? 'rtl' : 'ltr';
+}
 
 function systemLocale(): Locale {
   try {
@@ -28,6 +39,7 @@ function systemLocale(): Locale {
     if (tag.startsWith('zh')) return 'zh';
     if (tag.startsWith('it')) return 'it';
     if (tag.startsWith('ru')) return 'ru';
+    if (tag.startsWith('ar')) return 'ar';
     return 'en';
   } catch {
     return 'en';
@@ -37,7 +49,7 @@ function systemLocale(): Locale {
 function readInitial(): Locale {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === 'zh' || stored === 'en' || stored === 'it' || stored === 'ru') return stored;
+    if (stored === 'zh' || stored === 'en' || stored === 'it' || stored === 'ru' || stored === 'ar') return stored;
   } catch {
     // Private mode / storage disabled → system language below.
   }
@@ -45,7 +57,7 @@ function readInitial(): Locale {
 }
 
 let current: Locale = readInitial();
-if (typeof document !== 'undefined') document.documentElement.lang = DOCUMENT_LANG[current];
+applyDocumentLocale(current);
 const subscribers = new Set<() => void>();
 
 export function getLocale(): Locale {
@@ -58,10 +70,11 @@ export function subscribeLocale(onChange: () => void): () => void {
   return () => { subscribers.delete(onChange); };
 }
 
-export function localeLanguageName(locale: Locale): 'Chinese' | 'English' | 'Italian' | 'Russian' {
+export function localeLanguageName(locale: Locale): 'Chinese' | 'English' | 'Italian' | 'Russian' | 'Arabic' {
   if (locale === 'zh') return 'Chinese';
   if (locale === 'it') return 'Italian';
   if (locale === 'ru') return 'Russian';
+  if (locale === 'ar') return 'Arabic';
   return 'English';
 }
 
@@ -84,9 +97,7 @@ export function setLocale(next: Locale): void {
   try {
     localStorage.setItem(STORAGE_KEY, next);
   } catch { /* If the private mode cannot be saved, it will only affect this session */ }
-  if (typeof document !== 'undefined') {
-    document.documentElement.lang = DOCUMENT_LANG[next];
-  }
+  applyDocumentLocale(next);
   // Switch the UI now — an unloaded dictionary renders the Chinese original
   // rather than nothing — then re-render once the dictionary lands. In practice
   // prefetchLocaleDicts() has already loaded it and no second pass happens.

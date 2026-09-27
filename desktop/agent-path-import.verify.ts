@@ -30,7 +30,7 @@ assert.equal(
   '/Volumes/素材盘',
   'granting the same root is idempotent',
 );
-assert.throws(() => appendAgentImportRoot('', '/Volumes/素材,盘'), /逗号/);
+assert.throws(() => appendAgentImportRoot('', '/Volumes/素材,盘'), /commas/);
 
 const blocked: AgentPathImportResult = {
   imported: [], unsupportedFiles: [], duplicateCount: 0,

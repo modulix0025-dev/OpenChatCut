@@ -1,4 +1,5 @@
 import { MAX_TOTAL_CACHE_BYTES, type MediaBlobRecord } from './mediaBlobDatabase';
+import { t } from '../i18n/locale';
 
 const MEDIA_AUTHORITY_HEADER = 'x-openchatcut-media-authority';
 
@@ -12,7 +13,7 @@ export async function serverPathIsAuthoritative(src: string): Promise<boolean> {
 }
 
 export async function sha256Blob(blob: Blob): Promise<string> {
-  if (!globalThis.crypto?.subtle) throw new Error('当前环境不支持安全的媒体哈希');
+  if (!globalThis.crypto?.subtle) throw new Error(t('当前环境不支持安全的媒体哈希'));
   const digest = await globalThis.crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
@@ -29,18 +30,18 @@ export async function serverMediaHash(src: string): Promise<string | null> {
   try {
     response = await fetch(src, { cache: 'no-store' });
   } catch {
-    throw new Error(`无法确认媒体目标是否已存在: ${src}`);
+    throw new Error(t('无法确认媒体目标是否已存在: {src}', { src }));
   }
   if (response.status === 404
     || (isSpaFallback(response) && response.headers.get(MEDIA_AUTHORITY_HEADER) !== 'server')) return null;
-  if (!response.ok) throw new Error(`无法确认媒体目标是否已存在 (${response.status}): ${src}`);
+  if (!response.ok) throw new Error(t('无法确认媒体目标是否已存在 ({status}): {src}', { status: response.status, src }));
   const declaredBytes = Number(response.headers.get('content-length'));
   if (Number.isFinite(declaredBytes) && declaredBytes > MAX_TOTAL_CACHE_BYTES) {
-    throw new Error(`现有媒体目标大小无效: ${src}`);
+    throw new Error(t('现有媒体目标大小无效: {src}', { src }));
   }
   const blob = await response.blob();
   if (blob.size <= 0 || blob.size > MAX_TOTAL_CACHE_BYTES) {
-    throw new Error(`现有媒体目标大小无效: ${src}`);
+    throw new Error(t('现有媒体目标大小无效: {src}', { src }));
   }
   return sha256Blob(blob);
 }
@@ -60,7 +61,7 @@ export function uploadAssetIdFromSrc(src: string): string | null {
 
 export function uploadPathForRecord(rec: MediaBlobRecord): string {
   const assetId = uploadAssetIdFromSrc(rec.src);
-  if (!assetId) throw new Error(`工程包媒体 src 无法生成 server 路径: ${rec.src}`);
+  if (!assetId) throw new Error(t('工程包媒体 src 无法生成 server 路径: {src}', { src: rec.src }));
   return `/media/uploads/${assetId}${mediaExtension(rec.name)}`;
 }
 

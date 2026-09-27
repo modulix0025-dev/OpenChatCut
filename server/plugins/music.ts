@@ -143,16 +143,16 @@ export function musicGenerationPlugin(options: MusicOptions): Plugin {
           const raw = await readJson(req);
           const input = validateMusicRequest(raw);
           if (input.provider === 'minimax' && !options.minimaxApiKey) {
-            throw new Error('MiniMax is not configured. Set MINIMAX_API_KEY in .env.local or 设置面板.');
+            throw new Error('MiniMax is not configured. Set MINIMAX_API_KEY in .env.local or in Settings.');
           }
           if (input.provider === 'mureka' && !options.apiKey) {
-            throw new Error('Mureka is not configured. Set MUREKA_API_KEY in .env.local or 设置面板.');
+            throw new Error('Mureka is not configured. Set MUREKA_API_KEY in .env.local or in Settings.');
           }
           if (input.provider === 'atlas' && !options.atlasApiKey) {
-            throw new Error('Atlas Cloud is not configured. Set ATLASCLOUD_API_KEY in .env.local or 设置面板.');
+            throw new Error('Atlas Cloud is not configured. Set ATLASCLOUD_API_KEY in .env.local or in Settings.');
           }
           if (input.provider === 'sonilo' && !options.soniloApiKey) {
-            throw new Error('Sonilo is not configured. Set SONILO_API_KEY in .env.local or 设置面板.');
+            throw new Error('Sonilo is not configured. Set SONILO_API_KEY in .env.local or in Settings.');
           }
           // Sonilo has no client-selected model: /v1 routes to the latest server-side.
           const model = input.provider === 'minimax' ? options.minimaxModel

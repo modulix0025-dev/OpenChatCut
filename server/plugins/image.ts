@@ -438,7 +438,7 @@ export function imageGenerationPlugin(options: ImagePluginOptions): Plugin {
               prompt, count, aspectRatio, imageSize, referencePaths,
             });
           } else if (model === 'image-01') {
-            if (!options.minimaxApiKey) throw new Error('MiniMax is not configured. Set MINIMAX_API_KEY in .env.local or 设置面板.');
+            if (!options.minimaxApiKey) throw new Error('MiniMax is not configured. Set MINIMAX_API_KEY in .env.local or in Settings.');
             // aspect_ratio is passed straight through; imageSize/quality do not apply to MiniMax.
             // Actual MiniMax model id comes from settings (image-01 / image-01-live).
             images = await callMinimaxProvider(options.minimaxBaseUrl, options.minimaxApiKey, options.minimaxModel, {

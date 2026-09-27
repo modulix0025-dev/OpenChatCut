@@ -13,6 +13,7 @@ import {
   type BrowserExportDirectoryHandle, type BrowserExportFileHandle, type BrowserExportWritable, type ExportDestination,
 } from './exportDestinationModel';
 import { restoredBrowserDestination, saveBrowserDirectory } from './exportDestinationStorage';
+import { t } from '../i18n/locale';
 export {
   DEFAULT_EXPORT_DESTINATION, ExportDestinationError, exportHistoryDestinationId,
   exportDestinationFilename, exportDestinationErrorMessage, exportDestinationTargetPath,
@@ -343,7 +344,7 @@ export async function writeUrlToDestination(
       code: 'export_source_read_failed',
       retryable: response.status >= 500,
       targetPath,
-      message: `读取导出文件失败（HTTP ${response.status}）`,
+      message: t('读取导出文件失败（HTTP {status}）', { status: response.status }),
     }));
   }
   try {

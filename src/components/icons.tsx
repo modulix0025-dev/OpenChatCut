@@ -148,7 +148,8 @@ export function OpenChatCutWordmark({ width = 126 }: { width?: number }) {
       width={width}
       height={width / 4}
       viewBox="0 0 504 126"
-      style={{ display: 'block', flexShrink: 0 }}
+      direction="ltr"
+      style={{ display: 'block', flexShrink: 0, direction: 'ltr' }}
     >
       <rect x="0" y="13" width="166" height="92" rx="14" fill="currentColor" />
       <text

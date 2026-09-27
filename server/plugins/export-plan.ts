@@ -193,8 +193,8 @@ export function planExport(body: ExportRequest | null): ExportPlan {
       stage: 'preflight',
       code: 'export_resolution_unsupported',
       retryable: false,
-      message: `本机渲染器无法将 ${state.width}x${state.height} 画布精确缩放到 ${String(body?.resolution)}`
-        + `（最接近的可渲染尺寸为 ${size.width}x${size.height}）；请使用浏览器导出或更改分辨率。`,
+      message: `The local renderer cannot scale the ${state.width}x${state.height} canvas exactly to ${String(body?.resolution)}`
+        + ` (the nearest renderable size is ${size.width}x${size.height}); use browser export or change the resolution.`,
     }));
   }
   return {

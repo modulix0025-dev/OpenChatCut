@@ -89,6 +89,9 @@ export class ToolFailureTracker {
     if (locale === 'ru') {
       return `Запрос не выполнен из-за сбоя инструмента (${details}). Успешное выполнение этой операции не зафиксировано.`;
     }
+    if (locale === 'ar') {
+      return `تعذّر إكمال العملية المطلوبة لأن إحدى الأدوات فشلت (${details}). لم يُسجَّل نجاح العملية الفاشلة.`;
+    }
     return `I couldn't complete the requested operation because a tool failed (${details}). No success was recorded for the failed operation.`;
   }
 }

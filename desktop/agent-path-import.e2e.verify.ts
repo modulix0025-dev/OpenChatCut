@@ -58,7 +58,7 @@ try {
   assert.equal(unconfigured.imported.length, 0, 'no folder grant → no import');
   assert.equal(unconfigured.errors[0]?.code, 'IMPORT_ROOTS_NOT_CONFIGURED', 'the grant flow is requested');
 
-  seedKeystore({ AGENT_IMPORT_ROOTS: importRoot });
+  seedKeystore({ AGENT_IMPORT_ROOTS: importRoot, MEDIA_IMPORT_MODE: 'link' });
 
   // ── Whitelisted file imports end-to-end ──
   const first = await importAgentPaths({
@@ -75,14 +75,14 @@ try {
   assert.ok(imported.src.startsWith('/media/uploads/'), `published src (${imported.src})`);
   const storedPath = join(uploadDir, imported.storedName);
   cleanup.add(mediaReferenceManifestPath(uploadDir, imported.storedName));
-  await assert.rejects(stat(storedPath), { code: 'ENOENT' }, 'Agent import must not copy media bytes');
+  await assert.rejects(stat(storedPath), { code: 'ENOENT' }, 'in link mode an agent import copies no media bytes');
   assert.equal(resolveUploadFile(imported.storedName), sourcePath, 'the pool URL resolves to the source');
   assert.ok(imported.durationSeconds != null && imported.durationSeconds > 0, 'probe reports a duration');
 
   if (process.platform !== 'win32') {
     const rootAlias = join(workRoot, '素材盘-link');
     await symlink(importRoot, rootAlias, 'dir');
-    seedKeystore({ AGENT_IMPORT_ROOTS: rootAlias });
+    seedKeystore({ AGENT_IMPORT_ROOTS: rootAlias, MEDIA_IMPORT_MODE: 'link' });
     const throughAlias = await importAgentPaths({
       paths: [join(rootAlias, sourceName)],
       projectId: 'verify-project',
@@ -90,7 +90,7 @@ try {
     });
     assert.equal(throughAlias.errors.length, 0, 'symlinked roots resolve before containment checks');
     assert.equal(throughAlias.duplicateCount, 1, 'symlinked /tmp-style paths reach the importer');
-    seedKeystore({ AGENT_IMPORT_ROOTS: importRoot });
+    seedKeystore({ AGENT_IMPORT_ROOTS: importRoot, MEDIA_IMPORT_MODE: 'link' });
   }
 
   // ── Duplicate (same content hash) is skipped silently ──

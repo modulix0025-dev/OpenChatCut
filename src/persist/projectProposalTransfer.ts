@@ -5,6 +5,7 @@ import {
   saveProposalRecord,
   type StoredProposalRecord,
 } from './proposalStore';
+import { t } from '../i18n/locale';
 const EMPTY_REPLACEMENTS: ReadonlyMap<string, string> = new Map();
 
 
@@ -52,10 +53,10 @@ export function portableProposalRecord(
 ): StoredProposalRecord | undefined {
   if (raw === undefined) return undefined;
   const parsed = parseStoredProposalRecord(raw);
-  if (!parsed) throw new Error('工程包提案记录校验不通过');
+  if (!parsed) throw new Error(t('工程包提案记录校验不通过'));
   const { sessionGeneration: _sessionGeneration, ...proposal } = parsed;
   const portable = parseStoredProposalRecord(transformPortableValue(proposal, replacements));
-  if (!portable) throw new Error('工程包提案记录转换失败');
+  if (!portable) throw new Error(t('工程包提案记录转换失败'));
   return portable;
 }
 

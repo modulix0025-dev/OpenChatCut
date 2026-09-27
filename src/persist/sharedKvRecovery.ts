@@ -1,4 +1,5 @@
 import { isProjectDocumentKey, sameStoredValue, storedJson } from './sharedKvPending';
+import { t } from '../i18n/locale';
 
 export interface StoreSnapshot {
   version: 1;
@@ -45,7 +46,7 @@ async function preserveProject(
   const indexed = Array.isArray(next.entries.projects)
     && next.entries.projects.some((entry: unknown) => isRecord(entry) && entry.id === id);
   if (!indexed || !sameStoredValue(next.entries[`project:${id}`], value)) {
-    throw new Error('离线恢复副本尚未保存，原始离线修改仍保留在本机');
+    throw new Error(t('离线恢复副本尚未保存，原始离线修改仍保留在本机'));
   }
   // Merge responses include only the index and keys explicitly read back.
   // Keep confirmations from earlier documents for this bootstrap's remaining keys.

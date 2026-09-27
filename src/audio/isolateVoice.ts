@@ -1,6 +1,8 @@
 // Shared open-box voice isolation client (POST /api/isolate-voice).
 // Used by Inspector, Library audio-fx tab, timeline drag-drop, and agent tool.
 
+import { t } from '../i18n/locale';
+
 export const AUDIO_FX_ISOLATE_DEFAULT = 'library:audio-fx:isolate-voice';
 export const AUDIO_FX_ISOLATE_LIGHT = 'library:audio-fx:isolate-voice-light';
 export const AUDIO_FX_ISOLATE_STRONG = 'library:audio-fx:isolate-voice-strong';
@@ -31,7 +33,7 @@ export async function isolateVoiceOnSrc(
   opts?: { force?: boolean; sourceRevision?: string },
 ): Promise<IsolateVoiceResult> {
   if (!src.startsWith('/media/uploads/')) {
-    throw new Error('需先上传到媒体池（/media/uploads）');
+    throw new Error(t('需先上传到媒体池（/media/uploads）'));
   }
   const s = Math.max(0, Math.min(100, strength));
   const res = await fetch('/api/isolate-voice', {

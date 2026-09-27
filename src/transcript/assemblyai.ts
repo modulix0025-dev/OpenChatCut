@@ -8,6 +8,7 @@
 // original path; browser-local ASR requires the compact extract.
 import type { TranscriptResult } from './types';
 import { getMediaBlob } from '../persist/mediaBlobStore';
+import { t } from '../i18n/locale';
 
 const ASSEMBLYAI_POLL_DEADLINE_MS = 30 * 60 * 1000;
 const BASE = '/assemblyai/v2';
@@ -217,7 +218,7 @@ export async function loadTranscriptionSource(path: string): Promise<Blob> {
  */
 export async function extractAudioForAsr(src: string, required = false): Promise<string | null> {
   if (!src.startsWith('/media/uploads/')) {
-    if (required) throw new TranscriptionError('source-unavailable', `音轨提取只支持工程素材：${src}`);
+    if (required) throw new TranscriptionError('source-unavailable', t('音轨提取只支持工程素材：{src}', { src }));
     return null;
   }
   try {
@@ -228,25 +229,27 @@ export async function extractAudioForAsr(src: string, required = false): Promise
     });
     if (res.status === 422) {
       const data = (await res.json().catch(() => null)) as { noAudio?: boolean } | null;
-      if (data?.noAudio) throw new TranscriptionError('no-audio', `该片段没有音轨，无法转写：${src}`);
+      if (data?.noAudio) throw new TranscriptionError('no-audio', t('该片段没有音轨，无法转写：{src}', { src }));
     }
     if (!res.ok) {
       if (!required) return null;
       const detail = await res.text().catch(() => '');
       throw new TranscriptionError(
         'service-unavailable',
-        `音轨提取失败（HTTP ${res.status}${detail ? `：${detail.slice(0, 300)}` : ''}）`,
+        detail
+          ? t('音轨提取失败（HTTP {status}：{detail}）', { status: res.status, detail: detail.slice(0, 300) })
+          : t('音轨提取失败（HTTP {status}）', { status: res.status }),
       );
     }
     const data = (await res.json()) as { path?: string; ok?: boolean };
     if (data.path?.startsWith('/media/uploads/')) return data.path;
-    if (required) throw new TranscriptionError('service-unavailable', '音轨提取服务返回了无效路径');
+    if (required) throw new TranscriptionError('service-unavailable', t('音轨提取服务返回了无效路径'));
     return null;
   } catch (error) {
     if (error instanceof TranscriptionError) throw error;
     if (required) {
       const detail = error instanceof Error ? error.message : String(error);
-      throw new TranscriptionError('service-unavailable', `音轨提取失败：${detail}`);
+      throw new TranscriptionError('service-unavailable', t('音轨提取失败：{detail}', { detail }));
     }
     return null;
   }

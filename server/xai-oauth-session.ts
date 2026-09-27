@@ -278,11 +278,11 @@ export function importXaiOauthFromCli(): Promise<XaiOauthStatus> {
     try {
       text = readFileSync(CLI_AUTH_JSON, 'utf8');
     } catch {
-      throw new Error('未找到 ~/.grok/auth.json。请先在终端运行官方 Grok CLI 登录：grok login，完成后回来点击导入。');
+      throw new Error('~/.grok/auth.json not found. Sign in with the official Grok CLI first by running `grok login` in a terminal, then come back and click Import.');
     }
     const parsed = parseGrokAuthJson(text);
     if (!parsed) {
-      throw new Error('无法解析 ~/.grok/auth.json 中的登录会话。请先在终端运行 grok login 完成登录。');
+      throw new Error('Could not parse the sign-in session in ~/.grok/auth.json. Run `grok login` in a terminal to sign in first.');
     }
     const previous = current;
     try {
@@ -298,7 +298,7 @@ export function importXaiOauthFromCli(): Promise<XaiOauthStatus> {
       current = previous;
       statusError = messageOf(error).slice(0, 160);
       armTimer();
-      throw new Error(`登录会话已读取但刷新失败：${messageOf(error)}`);
+      throw new Error(`Sign-in session was read but refreshing it failed: ${messageOf(error)}`);
     }
   });
 }
