@@ -626,4 +626,6 @@ export default {
   '桌面端点击“选择目录”；也可手动输入绝对路径（可用 ~/ 开头）。清除后回到默认目录。': 'On desktop, click "Choose folder"; you can also type an absolute path (~/ accepted). Clear it to return to the default folder.',
   '已保存 · 重启应用后新的工程存储目录才会生效': 'Saved · the new project storage folder takes effect after a restart',
   '该模型不在内置目录，以上数值为估算（上下文 {context} / 输出 {output}）。若与实际不符，点「展开」手动修改。': 'This model is not in the built-in catalog, so these values are estimates (context {context} / output {output}). If they do not match the real model, expand and adjust them manually.',
+  '额外模型': 'Extra models',
+  '列表中没有的模型 ID，用逗号分隔（如 claude-opus-5-5）。保存后点击“读取模型”即可选择。': 'Model IDs missing from the list, comma-separated (for example claude-opus-5-5). Save, then click “Load models” to pick one.',
 } as Record<string, string>;

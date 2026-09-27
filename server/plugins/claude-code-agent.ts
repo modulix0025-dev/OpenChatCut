@@ -3,7 +3,6 @@ import { TLSSocket } from 'node:tls';
 import type { Plugin } from 'vite';
 import type {
   ClaudeCodeAccountSummary,
-  ClaudeCodeAgentModel,
   ClaudeCodeAgentModelsResponse,
   ClaudeCodeAgentStatus,
   ClaudeCodeTurnRequest,
@@ -16,6 +15,8 @@ import {
   type ClaudeCodeInstallation,
 } from '../claude-code/installation.ts';
 import { runClaudeCodeTurn } from '../claude-code/turn-runner.ts';
+import { claudeCodeModelList } from '../claude-code/models.ts';
+import { getKey } from '../keystore.ts';
 
 const JSON_BODY_LIMIT = 4 * 1024 * 1024;
 const AUTH_STATUS_TIMEOUT_MS = 8_000;
@@ -25,12 +26,8 @@ const AUTH_STATUS_TIMEOUT_MS = 8_000;
 // sonnet` turn reports `claude-sonnet-5` back in modelUsage), but the shared
 // capability catalog is keyed by canonical id: aliases miss every entry and
 // fall through to the estimator, which reports a wrong context window and
-// claims tools/images are unsupported. Canonical ids resolve from the catalog.
-const CURATED_MODELS: readonly ClaudeCodeAgentModel[] = [
-  { id: 'claude-sonnet-5', label: 'Claude Sonnet 5', isDefault: true },
-  { id: 'claude-opus-5', label: 'Claude Opus 5', isDefault: false },
-  { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', isDefault: false },
-];
+// claims tools/images are unsupported. The list comes from that catalog plus
+// CLAUDE_CODE_EXTRA_MODELS (see server/claude-code/models.ts).
 
 class HttpError extends Error {
   readonly status: number;
@@ -173,7 +170,7 @@ async function claudeCodeStatus(): Promise<ClaudeCodeAgentStatus> {
 }
 
 function claudeCodeModels(): ClaudeCodeAgentModelsResponse {
-  return { models: CURATED_MODELS };
+  return { models: claudeCodeModelList(getKey('CLAUDE_CODE_EXTRA_MODELS')) };
 }
 
 /** A CLI argument value that cannot be parsed as an option. */

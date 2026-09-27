@@ -104,6 +104,10 @@ const CLAUDE_CODE_PAGE: SettingsVendorPage = {
       defaultLabel: 'Claude Code 默认模型', discoverableModel: true,
       note: '登录后可从可用模型中选择，也可以手动填写别名（如 sonnet / opus / haiku）。',
     },
+    {
+      name: 'CLAUDE_CODE_EXTRA_MODELS', label: '额外模型', kind: 'text',
+      note: '列表中没有的模型 ID，用逗号分隔（如 claude-opus-5-5）。保存后点击“读取模型”即可选择。',
+    },
   ],
 };
 
