@@ -23,6 +23,7 @@ import {
 } from '../media-dir.ts';
 import { resolveProductAsset } from '../product-assets.ts';
 import { safePublicFetch } from '../safe-public-fetch.ts';
+import { classifyLoopbackMediaUrl, loopbackMediaFetch } from '../loopback-media.ts';
 import { materializeExportReferences } from './export-reference-materialization.ts';
 
 const MAX_MATERIALIZED_MEDIA_BYTES = 10 * 1024 * 1024 * 1024;
@@ -54,6 +55,8 @@ export interface ServerExportMediaOptions {
   publicDirectory?: string;
   uploadDirectory?: string;
   fetcher?: typeof safePublicFetch;
+  /** Fetcher for loopback services (ComfyUI etc.); asks the user first. */
+  loopbackFetcher?: typeof safePublicFetch;
   resolveUpload?: (name: string) => string | null;
   resolveUploadReference?: (name: string) => string | null;
   hydrateUpload?: (name: string, signal?: AbortSignal) => Promise<ResolvedUploadFile | null>;
@@ -70,7 +73,7 @@ export interface MaterializedServerExportMedia<Value> {
 
 type ResolvedServerExportMediaOptions = Required<Pick<
   ServerExportMediaOptions,
-  'publicDirectory' | 'uploadDirectory' | 'fetcher' | 'resolveUpload' | 'resolveUploadReference' | 'hydrateUpload' | 'maxMaterializedBytes'
+  'publicDirectory' | 'uploadDirectory' | 'fetcher' | 'loopbackFetcher' | 'resolveUpload' | 'resolveUploadReference' | 'hydrateUpload' | 'maxMaterializedBytes'
 >> & Pick<ServerExportMediaOptions, 'signal'>;
 
 async function readableFile(path: string): Promise<boolean> {
@@ -356,6 +359,7 @@ function resolvedOptions(options: ServerExportMediaOptions): ResolvedServerExpor
     publicDirectory: resolve(options.publicDirectory ?? resolve(process.cwd(), 'public')),
     uploadDirectory: resolve(options.uploadDirectory ?? uploadDir()),
     fetcher: options.fetcher ?? safePublicFetch,
+    loopbackFetcher: options.loopbackFetcher ?? ((source, init) => loopbackMediaFetch(String(source), init)),
     resolveUpload: options.resolveUpload ?? resolveUploadFile,
     resolveUploadReference: options.resolveUploadReference ?? resolveUploadReference,
     hydrateUpload: options.hydrateUpload
@@ -390,8 +394,17 @@ export async function materializeServerExportMedia<Value>(
   options.signal?.throwIfAborted();
   if (plan.issues.length > 0) throw preflightFailure(plan.issues);
   const resolved = resolvedOptions(options);
-  const remoteReferences = plan.references.filter((reference) => /^https?:\/\//i.test(reference.source));
-  const localReferences = plan.references.filter((reference) => !/^https?:\/\//i.test(reference.source));
+  // The app's own upload URLs (http://127.0.0.1:<port>/media/uploads/…) are
+  // local files: check and render them as their /media/uploads path.
+  const appUploadUrls = new Map<string, string>();
+  const references = plan.references.map((reference) => {
+    const loopback = classifyLoopbackMediaUrl(reference.source);
+    if (loopback?.kind !== 'app-upload') return reference;
+    appUploadUrls.set(reference.source, loopback.path);
+    return { ...reference, source: loopback.path };
+  });
+  const remoteReferences = references.filter((reference) => /^https?:\/\//i.test(reference.source));
+  const localReferences = references.filter((reference) => !/^https?:\/\//i.test(reference.source));
   const replacements = new Map<string, string>();
   const localPaths: string[] = [];
   try {
@@ -408,6 +421,7 @@ export async function materializeServerExportMedia<Value>(
       resolved.signal,
     );
     for (const [source, publicPath] of referenced.replacements) replacements.set(source, publicPath);
+    for (const [url, path] of appUploadUrls) replacements.set(url, replacements.get(path) ?? path);
     localPaths.push(...referenced.localPaths);
 
     const remoteIssues: ExportMediaIssue[] = [];
@@ -416,7 +430,11 @@ export async function materializeServerExportMedia<Value>(
       resolved.signal?.throwIfAborted();
       if (attemptedRemoteSources.has(reference.source)) continue;
       attemptedRemoteSources.add(reference.source);
-      const materialized = await materializeRemote(reference, resolved);
+      const viaLoopback = classifyLoopbackMediaUrl(reference.source)?.kind === 'service';
+      const materialized = await materializeRemote(
+        reference,
+        viaLoopback ? { ...resolved, fetcher: resolved.loopbackFetcher } : resolved,
+      );
       if ('code' in materialized) {
         resolved.signal?.throwIfAborted();
         remoteIssues.push(materialized);
