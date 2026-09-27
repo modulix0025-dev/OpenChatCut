@@ -2,12 +2,17 @@
 //   1. chrome-headless-shell for rendering/export into desktop-dist/chrome-headless-shell.
 //      config/electron-builder.config.mjs always reads extraResources from this staging directory.
 //   2. @remotion/compositor-<target>. npm installs only the host package, so cross-builds add it manually.
+//   3. Cross-builds for win32-x64 from a non-Windows host (Linux CI/cloud): the
+//      Windows variants of every native production dependency (lockfile-pinned
+//      versions, integrity-checked npm tarballs), the Windows FFmpeg binary,
+//      and the SHA-256-pinned whisper.cpp Windows release.
 // Usage: npx tsx desktop/prepare-target.mts darwin-arm64|darwin-x64|win32-x64|linux-x64
 // Chrome comes from the Chrome for Testing CDN used by @remotion/renderer at the same version.
 // The compositor uses npm pack and respects .npmrc registry settings. Both downloads are cached.
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { createWriteStream, existsSync } from 'node:fs';
-import { chmod, cp, mkdir, readFile, readdir, rename, rm } from 'node:fs/promises';
+import { chmod, cp, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -91,6 +96,117 @@ async function ensureCompositor(pkg: string): Promise<void> {
   console.log(`[prepare] compositor installed: ${pkg}@${rendererVer}`);
 }
 
+// Windows builds of the native production dependencies. npm only installs the
+// host's optional platform packages, so a Linux host must add these itself.
+const WIN32_X64_PLATFORM_PACKAGES = [
+  '@ffprobe-installer/win32-x64',
+  'sqlite-vec-windows-x64',
+  '@img/sharp-win32-x64',
+  '@koromix/koffi-win32-x64',
+  '@napi-rs/canvas-win32-x64-msvc',
+  '@github/copilot-win32-x64',
+];
+
+interface LockEntry { version?: string; integrity?: string; resolved?: string }
+
+async function lockEntry(pkg: string): Promise<LockEntry> {
+  const lock = JSON.parse(await readFile(join(ROOT, 'package-lock.json'), 'utf8')) as { packages: Record<string, LockEntry> };
+  const entry = lock.packages[`node_modules/${pkg}`];
+  if (!entry?.version || !entry.integrity) throw new Error(`${pkg} is not pinned in package-lock.json`);
+  return entry;
+}
+
+/** npm pack a lockfile-pinned package and verify the tarball against the lockfile integrity. */
+async function ensurePinnedPackage(pkg: string): Promise<void> {
+  const dest = join(ROOT, 'node_modules', ...pkg.split('/'));
+  const entry = await lockEntry(pkg);
+  if (existsSync(join(dest, 'package.json'))) {
+    const installed = JSON.parse(await readFile(join(dest, 'package.json'), 'utf8')) as { version?: string };
+    if (installed.version === entry.version) {
+      console.log(`[prepare] ${pkg}@${entry.version} ok`);
+      return;
+    }
+  }
+  const tmp = join(ROOT, 'desktop-dist', 'pack-tmp');
+  await rm(tmp, { recursive: true, force: true });
+  await mkdir(tmp, { recursive: true });
+  execFileSync('npm', ['pack', `${pkg}@${entry.version}`, '--pack-destination', tmp], { stdio: 'inherit' });
+  const tgz = (await readdir(tmp)).find((n) => n.endsWith('.tgz'));
+  if (!tgz) throw new Error(`npm pack produced no tgz for ${pkg}`);
+  const [algorithm, expected] = entry.integrity!.split('-', 2) as [string, string];
+  const actual = createHash(algorithm).update(await readFile(join(tmp, tgz))).digest('base64');
+  if (actual !== expected) throw new Error(`${pkg}@${entry.version}: tarball does not match package-lock.json integrity`);
+  execFileSync('tar', ['-xzf', join(tmp, tgz), '-C', tmp]);
+  await mkdir(dirname(dest), { recursive: true });
+  await rm(dest, { recursive: true, force: true });
+  await rename(join(tmp, 'package'), dest);
+  await rm(tmp, { recursive: true, force: true });
+  console.log(`[prepare] ${pkg}@${entry.version} installed (integrity verified)`);
+}
+
+/** Replace the host FFmpeg in ffmpeg-static with its Windows build. */
+async function ensureWindowsFfmpeg(): Promise<void> {
+  const dir = join(ROOT, 'node_modules', 'ffmpeg-static');
+  const exe = join(dir, 'ffmpeg.exe');
+  if (!existsSync(exe)) {
+    execFileSync(process.execPath, [join(dir, 'install.js')], {
+      cwd: dir,
+      stdio: 'inherit',
+      env: { ...process.env, npm_config_platform: 'win32', npm_config_arch: 'x64' },
+    });
+  }
+  if (!existsSync(exe)) throw new Error('ffmpeg-static did not produce ffmpeg.exe');
+  // The host binary must not ship inside a Windows package.
+  await rm(join(dir, 'ffmpeg'), { force: true });
+  const digest = createHash('sha256').update(await readFile(exe)).digest('hex');
+  console.log(`[prepare] ffmpeg-static win32-x64 ffmpeg.exe sha256=${digest}`);
+}
+
+/** Stage the pinned whisper.cpp Windows release under public/whisper-cli/win32-x64. */
+async function ensureWindowsWhisper(): Promise<void> {
+  const { PLATFORMS, VERSION, archiveProblem, flattenExecutableDir, PROVENANCE_SUFFIX } = await import(new URL('../scripts/sync-whisper-cli.mjs', import.meta.url).href) as {
+    PLATFORMS: Record<string, { asset: string | null; archiveBytes?: number; archiveSha256?: string; executable: string }>;
+    VERSION: string;
+    archiveProblem: (bytes: Uint8Array, spec: unknown) => string | null;
+    flattenExecutableDir: (dir: string, executable: string) => Promise<string>;
+    PROVENANCE_SUFFIX: string;
+  };
+  const spec = PLATFORMS['win32-x64']!;
+  const targetDir = join(ROOT, 'public', 'whisper-cli', 'win32-x64');
+  const binPath = join(targetDir, spec.executable);
+  if (existsSync(binPath) && existsSync(binPath + PROVENANCE_SUFFIX)) {
+    console.log('[prepare] whisper-cli win32-x64 ok');
+    return;
+  }
+  const url = `https://github.com/ggml-org/whisper.cpp/releases/download/${VERSION}/${spec.asset}`;
+  console.log(`[prepare] downloading ${url}`);
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`download failed ${response.status} for ${url}`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const problem = archiveProblem(bytes, spec);
+  if (problem) throw new Error(`whisper-cli win32-x64: ${problem}`);
+  const zip = join(ROOT, 'desktop-dist', 'whisper-win32-x64.zip');
+  await mkdir(dirname(zip), { recursive: true });
+  await writeFile(zip, bytes);
+  await rm(targetDir, { recursive: true, force: true });
+  await mkdir(targetDir, { recursive: true });
+  execFileSync('unzip', ['-q', zip, '-d', targetDir]);
+  const bin = await flattenExecutableDir(targetDir, spec.executable);
+  const binary = await readFile(bin);
+  await writeFile(bin + PROVENANCE_SUFFIX, `${JSON.stringify({
+    version: VERSION,
+    platform: 'win32-x64',
+    source: 'asset',
+    asset: spec.asset,
+    archiveSha256: spec.archiveSha256,
+    binaryBytes: binary.length,
+    binarySha256: createHash('sha256').update(binary).digest('hex'),
+    recordedAt: new Date().toISOString(),
+  }, null, 2)}\n`);
+  await rm(zip, { force: true });
+  console.log(`[prepare] whisper-cli win32-x64 staged (archive sha256 verified)`);
+}
+
 async function main(): Promise<void> {
   const key = process.argv[2] ?? `${process.platform}-${process.arch}`;
   const t = TARGETS[key];
@@ -101,6 +217,11 @@ async function main(): Promise<void> {
   await mkdir(STAGING, { recursive: true });
   await cp(chromeDir, join(STAGING, t.cft), { recursive: true });
   await ensureCompositor(t.compositor);
+  if (key === 'win32-x64' && process.platform !== 'win32') {
+    for (const pkg of WIN32_X64_PLATFORM_PACKAGES) await ensurePinnedPackage(pkg);
+    await ensureWindowsFfmpeg();
+    await ensureWindowsWhisper();
+  }
   console.log(`[prepare] ${key} ready — chrome staged at desktop-dist/chrome-headless-shell/${t.cft}`);
 }
 

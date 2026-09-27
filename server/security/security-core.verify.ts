@@ -187,6 +187,23 @@ registerCapabilityPrompter(developmentCapabilityPrompter(() => undefined));
 await assert.rejects(requireCapability(request({ scopeKey: 'dev-deny' })), CapabilityDeniedError);
 delete process.env.OPENCHATCUT_CAPABILITY_POLICY;
 
+// ── executable allowlisting in packaged builds ───────────────────────────────
+process.env.FFMPEG_PATH = '/planted/ffmpeg';
+process.env.OPENCHATCUT_FFMPEG = '/planted/ffmpeg';
+process.env.FFPROBE_PATH = '/planted/ffprobe';
+process.env.OPENCHATCUT_WHISPER_CLI = '/planted/whisper';
+const binaries = await import('../media-binaries.ts');
+assert.equal(binaries.ffmpegBin(), '/planted/ffmpeg', 'source checkouts keep the developer override');
+process.env[binaries.PACKAGED_RUNTIME_ENV] = '1';
+process.env.FFMPEG_BIN = '/planted/ffmpeg-bin';
+process.env.npm_config_platform = 'freebsd';
+for (const [name, value] of [['ffmpeg', binaries.ffmpegBin()], ['ffprobe', binaries.ffprobeBin()], ['whisper', binaries.whisperCliBin()]] as const) {
+  assert.ok(!value.includes('/planted/'), `packaged ${name} must ignore environment overrides (got ${value})`);
+}
+for (const name of ['FFMPEG_PATH', 'OPENCHATCUT_FFMPEG', 'FFPROBE_PATH', 'OPENCHATCUT_WHISPER_CLI', 'FFMPEG_BIN', 'npm_config_platform', binaries.PACKAGED_RUNTIME_ENV]) {
+  delete process.env[name];
+}
+
 resetCapabilityStateForTests();
 setAuditSinkForTests(null);
 rmSync(securityDir, { recursive: true, force: true });

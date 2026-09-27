@@ -89,7 +89,7 @@ assert.doesNotMatch(preload, /invoke:\s*\(\s*channel/, 'no generic channel pass-
 assert.doesNotMatch(preload, /\brequire\(|child_process|node:fs/, 'preload uses no Node APIs');
 
 // ── packaging: fuses and least privilege ────────────────────────────────────
-const config = (await import('../config/electron-builder.config.mjs')).default as Record<string, any>;
+const config = (await import(new URL('../config/electron-builder.config.mjs', import.meta.url).href) as { default: Record<string, any> }).default;
 assert.deepEqual(config.electronFuses, {
   runAsNode: false,
   enableCookieEncryption: true,

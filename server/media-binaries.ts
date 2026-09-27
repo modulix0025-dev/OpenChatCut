@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
-import { join, sep } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 
 const require = createRequire(import.meta.url);
 const ffmpegStatic = require('ffmpeg-static') as string | null;
@@ -50,13 +50,34 @@ function envOverride(...names: string[]): string | undefined {
   return undefined;
 }
 
+/**
+ * The shipped binary, located from its package directory. ffmpeg-static and
+ * @ffprobe-installer themselves honor FFMPEG_BIN / npm_config_platform at run
+ * time, which would let the environment pick the executable; packaged builds
+ * resolve the file directly instead.
+ */
+function shippedBinary(packageName: string, executable: string): string | null {
+  try {
+    const path = unpackedPath(join(dirname(require.resolve(`${packageName}/package.json`)), executable));
+    return existsSync(path) ? path : null;
+  } catch {
+    return null;
+  }
+}
+
+const EXE = process.platform === 'win32' ? '.exe' : '';
+
 export function ffmpegBin(): string {
+  if (!binaryOverridesAllowed()) return shippedBinary('ffmpeg-static', `ffmpeg${EXE}`) ?? 'ffmpeg';
   return envOverride('OPENCHATCUT_FFMPEG', 'FFMPEG_PATH')
     ?? (ffmpegStatic ? unpackedPath(ffmpegStatic) : null)
     ?? 'ffmpeg';
 }
 
 export function ffprobeBin(): string {
+  if (!binaryOverridesAllowed()) {
+    return shippedBinary(`@ffprobe-installer/${process.platform}-${process.arch}`, `ffprobe${EXE}`) ?? 'ffprobe';
+  }
   return envOverride('OPENCHATCUT_FFPROBE', 'FFPROBE_PATH')
     ?? (ffprobeInstaller.path ? unpackedPath(ffprobeInstaller.path) : null)
     ?? 'ffprobe';
