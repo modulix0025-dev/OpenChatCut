@@ -127,6 +127,20 @@ scrubbing, which is tested.
   are forwardRef objects, so scenes built on them rendered blank without an
   error. Fixed by trusting those components by reference, with a render test.
 
+## 5a. Security-relevant changes in the ModuleX fixes
+
+These came with the fixes in [CHANGELOG_MODULEX.md](../CHANGELOG_MODULEX.md).
+Each keeps the default-deny model.
+
+| Change | Boundary | Control |
+|---|---|---|
+| Export can use media from a loopback URL (F4) | Server fetches from `127.0.0.1` / `localhost` / `::1` | The app's own `/media/uploads/…` URLs are mapped to local files, with no request. Any other loopback host:port needs a `NETWORK_ACCESS` grant from the native dialog (scope `network.loopback:<host>:<port>`). No redirects are followed. LAN/private addresses and public non-standard ports stay refused by `safePublicFetch`. |
+| ComfyUI provider (F11) | Server talks to a user-configured ComfyUI | The base URL comes only from settings (not from projects or the agent). The optional token is sent as a bearer token. Workflow files are read only from the configured folder, by manifest id (validated pattern). No redirects. |
+| MCP binding follows the same editor across user edits (F6) | External MCP clients | Only a revision change from the *same* editor instance is adopted; a different editor instance is still a stale takeover and closes the transport. Edit-session drafts are still refused after the project changed (the session is marked stale). Proposals awaiting review are never auto-closed. |
+| Imports copy files into the library by default (F14) | Local file reads | Same trust as before: the file comes from the user's own pick or drop. It is copied with the same size/mtime check, into the upload directory. |
+| Storage moves happen at startup (F7) | Filesystem writes | Runs before any store opens. It copies only the known store entries, never deletes the source, and backs up replaced data (`*.before-move-<time>`). |
+| Persistent app log (F10) | Local log file | Written under `userData/logs`. Credential-shaped strings are redacted. Paths are kept, because the log exists to diagnose the user's own files. |
+
 ## 6. Remaining known risks
 
 See THREAT_MODEL.md §3. In short:

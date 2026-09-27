@@ -1,0 +1,12 @@
+{
+  "name": "Example text to image",
+  "kind": "image",
+  "inputs": {
+    "prompt": { "node": "6", "field": "text" },
+    "negativePrompt": { "node": "7", "field": "text" },
+    "seed": { "node": "3", "field": "seed" },
+    "width": { "node": "5", "field": "width" },
+    "height": { "node": "5", "field": "height" }
+  },
+  "output": { "node": "9" }
+}

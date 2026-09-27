@@ -1,0 +1,15 @@
+{
+  "name": "Example image to video",
+  "kind": "video",
+  "inputs": {
+    "prompt": { "node": "6", "field": "text" },
+    "negativePrompt": { "node": "7", "field": "text" },
+    "seed": { "node": "3", "field": "seed" },
+    "width": { "node": "12", "field": "width" },
+    "height": { "node": "12", "field": "height" },
+    "frames": { "node": "12", "field": "length" },
+    "fps": { "node": "40", "field": "frame_rate" },
+    "image": { "node": "20", "field": "image" }
+  },
+  "output": { "node": "50" }
+}
