@@ -117,3 +117,48 @@ export function externalSessionInfo(input: {
     updatedAt: new Date(session.updatedAt).toISOString(),
   };
 }
+
+/** Idle time after which a drafting external session counts as orphaned
+ *  (EXTERNAL_SESSION_ORPHAN_MINUTES in the browser's localStorage, default 5). */
+export function externalSessionOrphanMs(): number {
+  let minutes = 5;
+  try {
+    const raw = Number(globalThis.localStorage?.getItem('EXTERNAL_SESSION_ORPHAN_MINUTES'));
+    if (Number.isFinite(raw) && raw >= 1 && raw <= 24 * 60) minutes = raw;
+  } catch {
+    // no storage: keep the default
+  }
+  return minutes * 60_000;
+}
+
+/**
+ * Terminal status for an active session that should give way to a new one:
+ * 'stale' for a draft whose base no longer matches the project (it can never
+ * be applied), 'cancelled' for a draft idle past the orphan limit (its client
+ * went away). Null keeps it: fresh drafts, and proposals awaiting the user's
+ * review, are never closed here.
+ */
+export function retirableExternalSession(
+  session: ExternalEditSession,
+  liveDoc: ProjectDoc,
+  now = Date.now(),
+): 'stale' | 'cancelled' | null {
+  if (session.status !== 'drafting') return null;
+  if (isExternalEditSessionStale(session, liveDoc)) return 'stale';
+  return now - session.updatedAt > externalSessionOrphanMs() ? 'cancelled' : null;
+}
+
+/** Whether a read of a finished session may skip revalidating the binding:
+ *  same editor, and either the same revision or the one the session ended at. */
+export function terminalReadIsCurrent(
+  binding: ExternalBindingIdentity,
+  projectId: string,
+  editorInstanceId: string,
+  session: ExternalEditSession,
+  currentRevision: string,
+  terminalRevision: string | undefined,
+): boolean {
+  if (binding.projectId !== projectId || binding.editorInstanceId !== editorInstanceId) return false;
+  if (binding.baseRevision === currentRevision) return true;
+  return (session.status === 'applied' || session.status === 'rejected') && terminalRevision === currentRevision;
+}

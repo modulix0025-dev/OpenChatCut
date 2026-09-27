@@ -81,6 +81,20 @@ export function validateBrowserBinding(
     session.binding = current;
     return current;
   }
+  // Same editor, newer revision, inside an edit session: the user edited the
+  // project, so that edit session can no longer be applied. Only that call
+  // fails; the MCP session follows the editor to the current revision, so the
+  // client starts a new edit session instead of re-initializing (the editor
+  // closes the stale draft when the next one begins).
+  if (current
+    && sameEditorIdentity(current, session.binding)
+    && editorBindingMatches(current)) {
+    session.binding = current;
+    throw new ExternalEditorCallError(
+      'stale',
+      `Project ${current.projectId} changed in the editor, so this edit session can no longer be applied. Call begin_edit_session to start a new one; the MCP connection itself is still valid.`,
+    );
+  }
   const message = `MCP session binding for project ${session.binding.projectId} is stale. Re-initialize the MCP session.`;
   markMcpSessionStale(session, message);
   throw new ExternalEditorCallError('stale', message);

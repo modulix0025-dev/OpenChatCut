@@ -8,7 +8,7 @@ import {
 import { hydrateStoredExternalBridge } from './external-bridge-hydration';
 import {
   EXTERNAL_ACTIVE_STATUSES, externalSessionId, externalSessionInfo,
-  findActiveExternalSession, storedExternalSession, throwIfExternalCallCancelled,
+  findActiveExternalSession, retirableExternalSession, storedExternalSession, terminalReadIsCurrent, throwIfExternalCallCancelled,
   validateExternalBridgeBinding,
 } from './external-bridge-session';
 import { commitExternalProposal, type ExternalBridgePersistence } from './external-proposal-apply';
@@ -296,6 +296,18 @@ export class ExternalBridgeRuntime {
     );
   }
 
+  /** The external tool holding the project with an open draft, for the editor banner. */
+  activeHolder(): { clientName: string; since: number } | null {
+    const active = findActiveExternalSession(this.sessions);
+    return active?.status === 'drafting' ? { clientName: active.clientName, since: active.createdAt } : null;
+  }
+
+  /** "Release": the user closes the external tool's open draft. */
+  async releaseActiveSession(): Promise<void> {
+    const active = findActiveExternalSession(this.sessions);
+    if (active?.status === 'drafting') await this.markTerminal(active, 'cancelled');
+  }
+
   async reject(): Promise<void> {
     const session = this.currentProposalSession();
     if (!session) return;
@@ -304,7 +316,13 @@ export class ExternalBridgeRuntime {
   }
 
   private async begin(clientName: unknown, approvalMode: unknown): Promise<unknown> {
-    const active = findActiveExternalSession(this.sessions);
+    let active = findActiveExternalSession(this.sessions);
+    // Stale or orphaned drafts give way instead of blocking every new session.
+    const retire = active && retirableExternalSession(active, this.getContext().getDoc());
+    if (active && retire) {
+      await this.markTerminal(active, retire);
+      active = findActiveExternalSession(this.sessions);
+    }
     if (active) {
       throw new ExternalEditSessionOutcomeError(
         'rejected',
@@ -386,23 +404,10 @@ export class ExternalBridgeRuntime {
     return executed.result;
   }
 
-  private async validateTerminalReadBinding(
-    binding: ExternalBridgeBinding,
-    session: ExternalEditSession,
-  ): Promise<void> {
-    if (
-      binding.projectId !== this.projectId
-      || binding.editorInstanceId !== this.editorInstanceId
-    ) {
-      await this.validateBinding(binding);
-      return;
-    }
+  private async validateTerminalReadBinding(binding: ExternalBridgeBinding, session: ExternalEditSession): Promise<void> {
     const currentRevision = revisionOf(this.getContext().getDoc());
-    if (binding.baseRevision === currentRevision) return;
-    if (
-      (session.status === 'applied' || session.status === 'rejected')
-      && this.terminalRevisions.get(session.id) === currentRevision
-    ) return;
+    if (terminalReadIsCurrent(binding, this.projectId, this.editorInstanceId, session,
+      currentRevision, this.terminalRevisions.get(session.id))) return;
     await this.validateBinding(binding);
   }
 

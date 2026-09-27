@@ -169,10 +169,12 @@ async function callTool(
     return session.offline.execute(name, args);
   }
   const carriesSession = 'editSessionId' in args;
+  // Status and project tools follow the same editor to its current revision
+  // (a user edit is not a takeover); a different editor instance is still stale.
   validateBrowserBinding(
     session,
     allowRevisionDrift,
-    MCP_CONTROL_TOOL_NAMES[name] !== true,
+    true,
     carriesSession,
   );
   const control = await callControlTool(session, name, args, baseUrl);

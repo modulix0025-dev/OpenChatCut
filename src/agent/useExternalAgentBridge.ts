@@ -69,6 +69,9 @@ export interface ExternalProposalController {
   /** Pending real-project tool confirmation from an external session. */
   pendingGuard: ExternalGuardRequest | null;
   confirmGuard: (id: string, allow: boolean) => void;
+  /** External tool holding the project with an open draft, if any. */
+  holder: { clientName: string; since: number } | null;
+  releaseHolder: () => void;
 }
 
 function retryDelay(): Promise<void> {
@@ -457,7 +460,23 @@ export function useExternalAgentBridge(ctx: AgentContext, projectId: string): Ex
   useExternalPolling(projectId, runtime, setError);
   const actions = useExternalActions(runtime.runtimeRef, setError);
   const guard = useExternalGuard(runtime, projectId, setError, t);
+  const [holder, setHolder] = useState<ExternalProposalController['holder']>(null);
+  useEffect(() => {
+    const read = () => {
+      const next = runtime.runtimeRef.current?.runtime.activeHolder() ?? null;
+      setHolder((current) => (current?.since === next?.since && current?.clientName === next?.clientName ? current : next));
+    };
+    read();
+    const timer = setInterval(read, 2_000);
+    return () => clearInterval(timer);
+  }, [runtime.runtimeRef]);
+  const releaseHolder = useCallback(() => {
+    void runtime.runtimeRef.current?.runtime.releaseActiveSession()
+      .then(() => setHolder(null), (reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)));
+  }, [runtime.runtimeRef]);
   return {
+    holder,
+    releaseHolder,
     proposal: snapshot.proposal,
     proposalStale: snapshot.stale,
     error,

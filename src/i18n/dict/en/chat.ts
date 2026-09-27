@@ -414,4 +414,6 @@ export default {
   '视频生成': 'Video generation',
   '音乐生成': 'Music',
   '音效生成': 'Sound effect generation',
+  '外部工具「{name}」正在编辑此工程（{time} 起）': 'External tool “{name}” is editing this project (since {time})',
+  '解除锁定': 'Release',
 } as Record<string, string>;

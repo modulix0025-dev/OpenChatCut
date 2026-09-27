@@ -258,13 +258,27 @@ try {
   assert.equal(callOutcome(crossProject), 'rejected');
   assert.equal(pendingEditorCallsForTest().length, 0, 'wrong-project calls never reach another editor queue');
 
+  // A user edit in the same editor advances the revision: status and project
+  // tools follow it instead of forcing the client to re-initialize.
   registerEditor(projectA, editorA, 'v2-mcp-project-a', editorTools);
+  const followed = await boundA.client.callTool({
+    name: 'openchatcut_status',
+    arguments: {},
+  });
+  assert.notEqual(followed.isError, true, 'a same-editor revision change does not poison the MCP session');
+  assert.equal(
+    mcpSessionsForTest().find((session) => session.id === boundA.sessionId)?.binding?.baseRevision,
+    'v2-mcp-project-a',
+    'the binding follows the editor to its current revision',
+  );
+  // A different editor instance is a takeover and still makes the session stale.
+  registerEditor(projectA, 'editor-a-replacement', 'v3-mcp-project-a', editorTools);
   const staleSession = await boundA.client.callTool({
     name: 'openchatcut_status',
     arguments: {},
   });
   assert.equal(staleSession.isError, true);
-  assert.equal(callOutcome(staleSession), 'stale', 'every tool call revalidates editor instance and base revision');
+  assert.equal(callOutcome(staleSession), 'stale', 'every tool call revalidates the editor instance');
   // After a stale error the transport is closed so subsequent requests fail
   // with a session-not-found error instead of returning another stale result.
   registerEditor(projectA, editorA, revisionA, editorTools);

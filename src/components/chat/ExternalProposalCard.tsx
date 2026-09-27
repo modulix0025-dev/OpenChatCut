@@ -10,6 +10,20 @@ import { ApprovalDetails } from './ApprovalDetails';
 type ExternalGuard = NonNullable<ExternalProposalController['pendingGuard']>;
 type ConfirmGuard = ExternalProposalController['confirmGuard'];
 
+/** An external tool (MCP client) has an open draft on this project. */
+function ExternalHolderBanner({ holder, onRelease }: {
+  holder: { clientName: string; since: number };
+  onRelease: () => void;
+}) {
+  const t = useT();
+  return (
+    <div role="status" style={{ margin: '10px 0', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: theme.textDim }}>
+      <span style={{ flex: 1 }}>{t('外部工具「{name}」正在编辑此工程（{time} 起）', { name: holder.clientName, time: new Date(holder.since).toLocaleTimeString() })}</span>
+      <button type="button" onClick={onRelease}>{t('解除锁定')}</button>
+    </div>
+  );
+}
+
 function ExternalErrorAlert({ message }: { message: string }) {
   const t = useT();
   // Bridge errors surface as machine-readable strings; map the common
@@ -128,6 +142,7 @@ export function ExternalProposalCard({ external, onPreviewState }: {
   return (
     <>
       {external.error && <ExternalErrorAlert message={external.error} />}
+      {external.holder && <ExternalHolderBanner holder={external.holder} onRelease={external.releaseHolder} />}
       {external.pendingGuard && (
         <PendingGuardDialog
           guard={external.pendingGuard}

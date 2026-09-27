@@ -412,3 +412,44 @@ const staleRecordedRun = (await loadAgentRuntimeSidecar('stale-record-project'))
   .find((run) => run.runId === agentRunId(staleRecordSession));
 assert.equal(staleRecordedRun?.status, 'aborted');
 assert.equal(staleRecordedRun?.events.at(-1)?.type, 'final', 'stale sessions have a durable terminal record');
+
+// A drafting session left behind after the user edited the project, or one
+// idle past the orphan limit, no longer blocks begin_edit_session.
+{
+  const orphanLive = makeDraft(base);
+  const orphanRuntime = new ExternalBridgeRuntime(
+    'orphan-project',
+    'orphan-editor',
+    () => ({
+      commands: orphanLive.commands,
+      getState: orphanLive.getState,
+      getDoc: orphanLive.getDoc,
+      getCreativeMode: () => null,
+      templates: [],
+      audio: [],
+      getProjectId: () => 'orphan-project',
+    }),
+    () => undefined,
+  );
+  const binding = () => ({ projectId: 'orphan-project', editorInstanceId: 'orphan-editor', baseRevision: revisionOf(orphanLive.getDoc()) });
+  const first = await orphanRuntime.execute('begin_edit_session', {}, binding()) as { editSessionId: string };
+  orphanLive.commands.setAspect(1080, 1080, 'contain');
+  const second = await orphanRuntime.execute('begin_edit_session', {}, binding()) as { editSessionId: string };
+  assert.notEqual(second.editSessionId, first.editSessionId, 'a stale drafting session gives way to a new one');
+  const sessions = await orphanRuntime.execute('list_edit_sessions', {}, binding()) as Array<{ editSessionId: string; status: string }>;
+  assert.equal(sessions.find((entry) => entry.editSessionId === first.editSessionId)?.status, 'stale');
+
+  // Idle past the limit (5 minutes by default): closed as cancelled.
+  const realNow = Date.now;
+  Date.now = () => realNow() + 6 * 60_000;
+  try {
+    const third = await orphanRuntime.execute('begin_edit_session', {}, binding()) as { editSessionId: string };
+    assert.notEqual(third.editSessionId, second.editSessionId, 'an idle drafting session gives way too');
+    const after = await orphanRuntime.execute('list_edit_sessions', {}, binding()) as Array<{ editSessionId: string; status: string }>;
+    assert.equal(after.find((entry) => entry.editSessionId === second.editSessionId)?.status, 'cancelled');
+    // A fresh, current session still blocks a second one.
+    await assert.rejects(orphanRuntime.execute('begin_edit_session', {}, binding()), /already active/);
+  } finally {
+    Date.now = realNow;
+  }
+}
