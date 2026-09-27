@@ -38,4 +38,5 @@ export default {
   '{n} 分钟前': '{n} min fa',
   '{n} 小时前': '{n} ore fa',
   '{n} 天前': '{n} giorni fa',
+  '新工程 {date}': 'Nuovo progetto {date}',
 } as Record<string, string>;

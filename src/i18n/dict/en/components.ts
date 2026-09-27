@@ -364,4 +364,5 @@ export default {
   '边框阴影': 'Border shadow',
   '边框颜色': 'Border color',
   '预览画布片段变换': 'Preview canvas clip transform',
+  '新工程 {date}': 'New project {date}',
 } as Record<string, string>;

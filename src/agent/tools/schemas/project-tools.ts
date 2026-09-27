@@ -79,7 +79,7 @@ export const PROJECT_TOOL_SCHEMAS: AgentToolSchema[] = [
   {
     name: 'edit_project',
     description: [
-      'Update project-level settings or speakers. action=update: change name/description via json {"name"?, "description"?}.',
+      'Update project-level settings or speakers. action=update: change name/description via json {"name"?, "description"?} — this renames the PROJECT itself (the name in the project list); renaming a timeline does not.',
       'action=speaker-update: project-wide rename/merge a speaker — {from:"A", to:"New name"} relabels every word of that speaker across all transcribed clips in the open project.',
       'speaker-create/speaker-delete are unsupported here (no speaker roster — speakers are per-word diarization labels); use speaker-update to relabel, or manage_transcript fix per clip.',
     ].join(' '),

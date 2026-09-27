@@ -3,7 +3,7 @@ import { purgeProjectCascade } from '../persist/mediaCleanup';
 import {
   createProject,
   duplicateProject,
-  randomProjectName,
+  defaultProjectName,
   renameProject,
 } from '../persist/projectStore';
 import { buildProjectExport, importProjectPackage } from '../persist/projectTransfer';
@@ -65,7 +65,7 @@ export function useDashboardActions(refresh: () => Promise<void>): DashboardActi
   return {
     onOpen: (id) => navigateTo(`#/editor/${id}`),
     onNew: async () => {
-      const project = await createProject(randomProjectName(), emptyProjectDoc());
+      const project = await createProject(defaultProjectName(), emptyProjectDoc());
       await refresh();
       navigateTo(`#/editor/${project.id}`);
     },

@@ -2,6 +2,7 @@ export { loadProjectThumb, saveProjectThumb } from './projectThumbStore';
 import type { ProjectDoc, TimelineState } from '../editor/types';
 import type { LlmProvider } from '../../shared/llm-providers';
 import { CURRENT_PROJECT_VERSION } from '../../shared/project-version';
+import { getLocale, t } from '../i18n/locale';
 import {
   kvDel as idbDel,
   kvGet,
@@ -486,10 +487,14 @@ const newId = () =>
     ? crypto.randomUUID()
     : `p_${now().toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}`;
 
-// Auto-name new empty projects with a generated adjective/noun combination.
-const ADJ = ['流光', '静默', '暖阳', '深蓝', '轻盈', '锋利', '柔和', '斑斓', '清冽', '灼热', '朦胧', '澄澈'];
-const NOUN = ['序曲', '航迹', '棱镜', '潮汐', '织机', '回响', '飞羽', '砂丘', '苔原', '穹顶', '流域', '星图'];
-export function randomProjectName(): string {
-  const pick = (a: string[]) => a[Math.floor(Math.random() * a.length)];
-  return `${pick(ADJ)}${pick(NOUN)}`;
+const LOCALE_TAGS: Record<ReturnType<typeof getLocale>, string> = { zh: 'zh-CN', en: 'en-GB', it: 'it-IT', ru: 'ru-RU' };
+
+/** Default name for a new project, in the interface language, with the date
+ *  and time so it is recognizable in the list (it used to be a random Chinese
+ *  word pair whatever the language). */
+export function defaultProjectName(date: Date = new Date()): string {
+  const stamp = date.toLocaleString(LOCALE_TAGS[getLocale()] ?? 'en-GB', {
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  });
+  return t('新工程 {date}', { date: stamp });
 }
