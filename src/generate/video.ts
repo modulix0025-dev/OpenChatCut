@@ -3,9 +3,13 @@ import { sourceWindowForTimelineRange } from '../editor/sourceLimit';
 
 export interface SubmitVideoArgs {
   operationId?: string;
-  model: 'seedance2' | 'kling' | 'hailuo' | 'byteplus' | 'grok-imagine-video' | 'ofox' | 'fal';
+  model: 'seedance2' | 'kling' | 'hailuo' | 'byteplus' | 'grok-imagine-video' | 'ofox' | 'fal' | 'comfyui';
   /** Explicit curated Fal model ID; omitted uses the saved Fal default. */
   falModel?: string;
+  /** ComfyUI workflow id or name. */
+  workflow?: string;
+  /** ComfyUI negative prompt. */
+  negativePrompt?: string;
   prompt?: string;
   name?: string;
   durationSeconds?: number | string;

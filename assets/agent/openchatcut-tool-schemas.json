@@ -1162,7 +1162,7 @@
     },
     {
       "name": "submit_image",
-      "description": "Generate one or more AI images (Fal catalog, gpt-image-2, nano-banana, MiniMax image-01, WaveSpeed, BytePlus Seedream, or xAI Grok Imagine), save them to the project media pool, and optionally propose adding them to the active timeline. Call only when the user explicitly requested the generation.",
+      "description": "Generate one or more AI images (Fal catalog, gpt-image-2, nano-banana, MiniMax image-01, WaveSpeed, BytePlus Seedream, xAI Grok Imagine, or the user's own ComfyUI workflows), save them to the project media pool, and optionally propose adding them to the active timeline. Call only when the user explicitly requested the generation.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -1175,9 +1175,10 @@
               "wavespeed",
               "byteplus",
               "grok-imagine",
-              "fal"
+              "fal",
+              "comfyui"
             ],
-            "description": "gpt-image-2 is the default; nano-banana is best for reference-heavy work; image-01 is MiniMax (at most 9 outputs; one subject reference when R2 is configured); wavespeed is WaveSpeed AI (fast generic image models, no references); byteplus is BytePlus ModelArk Seedream (no references yet); grok-imagine is xAI Grok Imagine (text-to-image only, no references, at most 4 outputs, 1K/2K)."
+            "description": "comfyui runs one of the user's ComfyUI image workflows (pick it with workflow; at most one reference image, count 1–4); gpt-image-2 is the default; nano-banana is best for reference-heavy work; image-01 is MiniMax (at most 9 outputs; one subject reference when R2 is configured); wavespeed is WaveSpeed AI (fast generic image models, no references); byteplus is BytePlus ModelArk Seedream (no references yet); grok-imagine is xAI Grok Imagine (text-to-image only, no references, at most 4 outputs, 1K/2K)."
           },
           "falModel": {
             "type": "string",
@@ -1193,6 +1194,14 @@
               "recraft-v3"
             ],
             "description": "With model=fal, select a curated Fal image model; omitted uses the saved Fal image default. nano-banana-2: Nano Banana 2 — count 1–4, resolutions 0.5K/1K/2K/4K, up to 14 image refs, image editing, default 1K/auto; nano-banana-pro: Nano Banana Pro — count 1–4, resolutions 1K/2K/4K, up to 14 image refs, image editing, default 1K/auto; gpt-image-2: GPT Image 2 — count 1–4, resolutions 1K, up to 16 image refs, image editing, default 1K/4:3; flux-2: FLUX.2 — count 1–4, resolutions 1K, default 1K/4:3; flux-2-pro: FLUX.2 Pro — count 1–1, resolutions 1K, up to 4 image refs, image editing, default 1K/4:3; seedream-5-pro: Seedream 5.0 Pro — count 1–1, resolutions 1K/2K, up to 10 image refs, image editing, default 2K/auto; ideogram-4: Ideogram 4 — count 1–4, resolutions 1K, default 1K/1:1; qwen-image-3: Qwen Image 3 — count 1–4, resolutions 1K, default 1K/1:1; recraft-v3: Recraft V3 — count 1–1, resolutions 1K, up to 1 image refs, image editing, default 1K/1:1. Model-specific limits are validated before submission."
+          },
+          "workflow": {
+            "type": "string",
+            "description": "model=comfyui only: workflow id (file name in the ComfyUI workflow folder) or its name. An unknown or missing workflow returns the list of available ones."
+          },
+          "negativePrompt": {
+            "type": "string",
+            "description": "model=comfyui only, for workflows that take a negative prompt."
           },
           "prompt": {
             "type": "string",
@@ -1947,7 +1956,7 @@
     },
     {
       "name": "submit_video",
-      "description": "Submit a Fal catalog, Seedance 2.0, Kling, MiniMax Hailuo, BytePlus Seedance, xAI Grok Imagine, or OFox video generation job and create one video asset in the project media pool. Does not place the video on the timeline. Keep image, video, and audio references in their matching arrays.",
+      "description": "Submit a Fal catalog, Seedance 2.0, Kling, MiniMax Hailuo, BytePlus Seedance, xAI Grok Imagine, OFox, or ComfyUI workflow video generation job and create one video asset in the project media pool. Does not place the video on the timeline. Keep image, video, and audio references in their matching arrays.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -1960,9 +1969,10 @@
               "byteplus",
               "grok-imagine-video",
               "ofox",
-              "fal"
+              "fal",
+              "comfyui"
             ],
-            "description": "hailuo is MiniMax: 6 or 10s; firstFrame optional; lastFrame allowed with firstFrame; no multi-ref or multi-shot. 1080p is 6s only. byteplus is BytePlus ModelArk Seedance — same request shape/limits as seedance2. grok-imagine-video is xAI Grok Imagine: text-to-video only, 1–15s, audio track included, no references/frames. ofox is the OFox multi-model gateway (Seedance/Wan and more behind one key): 2–30s with per-model limits enforced by the API; supports firstFrame (and optional lastFrame), or up to 9 refImages (frames and refImages are mutually exclusive); no refVideos/refAudios yet."
+            "description": "comfyui runs one of the user's ComfyUI video workflows (pick it with workflow): 1–120s, at most one reference image (firstFrame or one refImage), ratio/resolution/seed are injected where the workflow manifest maps them. hailuo is MiniMax: 6 or 10s; firstFrame optional; lastFrame allowed with firstFrame; no multi-ref or multi-shot. 1080p is 6s only. byteplus is BytePlus ModelArk Seedance — same request shape/limits as seedance2. grok-imagine-video is xAI Grok Imagine: text-to-video only, 1–15s, audio track included, no references/frames. ofox is the OFox multi-model gateway (Seedance/Wan and more behind one key): 2–30s with per-model limits enforced by the API; supports firstFrame (and optional lastFrame), or up to 9 refImages (frames and refImages are mutually exclusive); no refVideos/refAudios yet."
           },
           "falModel": {
             "type": "string",
@@ -1980,6 +1990,14 @@
               "pixverse-v6"
             ],
             "description": "With model=fal, select a curated Fal video model; omitted uses the saved Fal video default. seedance-2.5: Seedance 2.5 — audio toggle supported, resolutions 480p/720p, durations 4–30s, up to 30 image refs, up to 10 video refs, up to 10 audio refs, first frame/last frame/reference mode, default 720p/5s/auto; seedance-2.0: Seedance 2.0 — audio toggle supported, resolutions 480p/720p/1080p/4k, durations 4–15s, up to 9 image refs, up to 3 video refs, up to 3 audio refs, first frame/last frame/reference mode, default 720p/5s/auto; kling-v3-standard: Kling 3.0 Standard — audio toggle supported, resolutions 720p, durations 3–15s, first frame/last frame, default 720p/5s/16:9; kling-v3-pro: Kling 3.0 Pro — audio toggle supported, resolutions 1080p, durations 3–15s, first frame/last frame, default 1080p/5s/16:9; kling-o3-standard: Kling O3 Standard — audio toggle supported, resolutions 720p, durations 3–15s, up to 4 image refs, reference mode, default 720p/5s/16:9; kling-o3-pro: Kling O3 Pro — audio toggle supported, resolutions 1080p, durations 3–15s, up to 4 image refs, reference mode, default 1080p/5s/16:9; veo-3.1: Veo 3.1 — audio toggle supported, resolutions 720p/1080p/4k, durations 4/6/8s, first frame, default 720p/8s/16:9; veo-3.1-fast: Veo 3.1 Fast — audio toggle supported, resolutions 720p/1080p/4k, durations 4/6/8s, first frame, default 720p/8s/16:9; wan-3.0: Wan 3.0 — audio toggle supported, resolutions 480p/720p/1080p, durations 5/10s, first frame/last frame, default 1080p/5s/adaptive; minimax-h3-max: MiniMax H3 Max — no audio toggle, resolutions 480p/768p/1080p, durations 5–15s, up to 9 image refs, up to 3 video refs, up to 3 audio refs, reference mode, default 768p/5s/16:9; pixverse-v6: PixVerse V6 — audio toggle supported, resolutions 360p/540p/720p/1080p, durations 1–15s, first frame, default 720p/5s/16:9. Omit duration/resolution to use model defaults."
+          },
+          "workflow": {
+            "type": "string",
+            "description": "model=comfyui only: workflow id (file name in the ComfyUI workflow folder) or its name. An unknown or missing workflow returns the list of available ones."
+          },
+          "negativePrompt": {
+            "type": "string",
+            "description": "model=comfyui only, for workflows that take a negative prompt."
           },
           "prompt": {
             "type": "string",

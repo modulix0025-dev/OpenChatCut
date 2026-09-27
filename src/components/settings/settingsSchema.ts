@@ -86,6 +86,18 @@ const falPage = (cap: 'image' | 'video'): SettingsVendorPage => ({
   ],
 });
 
+const comfyuiPage = (group: 'image' | 'video'): SettingsVendorPage => ({
+  key: `${group}/comfyui`, vendor: 'comfyui', title: 'ComfyUI',
+  note: '用你自己的 ComfyUI 工作流生成（本机 http://127.0.0.1:8188，或租用 GPU 服务器的隧道地址）。'
+    + '工作流文件夹里每个工作流是一对文件：<名称>.json（在 ComfyUI 里“导出 (API 格式)”）和 <名称>.manifest.json（说明提示词、种子、尺寸、参考图写入哪个节点，以及输出节点）。'
+    + '详见 README_MODULEX.md。',
+  fields: [
+    text('COMFYUI_BASE_URL', 'ComfyUI 地址', 'http://127.0.0.1:8188'),
+    secret('COMFYUI_API_KEY', '访问令牌（可选）'),
+    directory('COMFYUI_WORKFLOW_DIR', '工作流文件夹', '未设置', '存放 API 格式工作流及其 manifest 的文件夹。'),
+  ],
+});
+
 export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
   {
     key: 'agent', title: 'Agent 模型', icon: 'sparkles',
@@ -113,6 +125,7 @@ export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
           { value: 'wavespeed', label: 'WaveSpeed' },
           { value: 'byteplus', label: 'BytePlus · Seedream' },
           { value: 'grok-imagine', label: 'xAI Grok Imagine' },
+          { value: 'comfyui', label: 'ComfyUI' },
         ]),
         vendors: [
           { key: 'image/openai', vendor: 'openai', title: 'OpenAI', fields: [
@@ -139,6 +152,7 @@ export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
               modelText('XAI_IMAGE_MODEL', '生图模型', 'grok-imagine-image-2.0',
                 '测试连接后可直接选择接口返回的模型，也可以手动填写模型 ID。', true),
             ] },
+          comfyuiPage('image'),
         ] },
       VOICE_SETTINGS_GROUP,
       { key: 'video', title: '生视频', hint: 'submit_video · 文 / 图生视频，任一厂商即可。',
@@ -150,6 +164,7 @@ export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
           { value: 'byteplus', label: 'BytePlus · Seedance' },
           { value: 'grok-imagine-video', label: 'xAI Grok Imagine' },
           { value: 'ofox', label: 'OFox · 多模型' },
+          { value: 'comfyui', label: 'ComfyUI' },
         ]),
         vendors: [
           falPage('video'),
@@ -179,6 +194,7 @@ export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
               modelText('OFOX_VIDEO_MODEL', '视频模型', 'bytedance/seedance-2.0-fast',
                 '测试连接后可直接选择接口返回的模型，也可以手动填写模型 ID。', true),
             ] },
+          comfyuiPage('video'),
         ] },
       { key: 'music', title: '生音乐', hint: 'submit_music · 文字 / 成片生成配乐，任一厂商即可。',
         route: routeSelect('PREFERRED_MUSIC_VENDOR', [

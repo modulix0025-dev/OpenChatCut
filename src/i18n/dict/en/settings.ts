@@ -637,4 +637,10 @@ export default {
   '打开日志文件夹': 'Open logs folder',
   '单轮超时（秒）': 'Turn timeout (seconds)',
   '一轮最长运行时间，60–7200 秒。超过 90 秒没有进展时，聊天里会提示正在等待什么。': 'Longest time one turn may run, 60–7200 seconds. After 90 seconds without progress the chat says what the turn is waiting on.',
+  'ComfyUI 地址': 'ComfyUI address',
+  '访问令牌（可选）': 'Access token (optional)',
+  '工作流文件夹': 'Workflow folder',
+  '未设置': 'Not set',
+  '存放 API 格式工作流及其 manifest 的文件夹。': 'Folder with the API-format workflows and their manifests.',
+  '用你自己的 ComfyUI 工作流生成（本机 http://127.0.0.1:8188，或租用 GPU 服务器的隧道地址）。工作流文件夹里每个工作流是一对文件：<名称>.json（在 ComfyUI 里“导出 (API 格式)”）和 <名称>.manifest.json（说明提示词、种子、尺寸、参考图写入哪个节点，以及输出节点）。详见 README_MODULEX.md。': 'Generate with your own ComfyUI workflows (local http://127.0.0.1:8188, or the tunnel address of a rented GPU server). Each workflow in the folder is a pair of files: <name>.json (exported with “Save (API Format)” in ComfyUI) and <name>.manifest.json (which node receives the prompt, seed, size and reference image, and which node is the output). See README_MODULEX.md.',
 } as Record<string, string>;

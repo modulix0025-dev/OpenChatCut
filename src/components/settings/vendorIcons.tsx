@@ -44,7 +44,7 @@ export type VendorId =
   | 'seedance' | 'kling' | 'mureka' | 'sonilo' | 'pexels' | 'pixabay' | 'unsplash' | 'freesound'
   | 'assemblyai' | 'deepgram' | 'groq' | 'cartesia' | 'e2b' | 'firecrawl' | 'r2' | 'localdisk' | 'localasr'
   | 'stepfun' | 'byteplus' | 'inworld' | 'fishaudio' | 'speechify' | 'wavespeed'
-  | 'vision' | 'proxy' | 'atlas' | 'xai' | 'xai-oauth' | 'copilot' | 'ofox' | 'fal';
+  | 'vision' | 'proxy' | 'atlas' | 'xai' | 'xai-oauth' | 'copilot' | 'ofox' | 'fal' | 'comfyui';
 
 interface SvgIcon {
   readonly svg: string;
@@ -96,6 +96,7 @@ const MONOGRAMS: Partial<Record<VendorId, { bg: string; mono: string; fg?: strin
   llm: { bg: '#34363c', mono: 'AI', fg: '#f7f7f8' },
   e2b: { bg: '#FF8800', mono: 'E2', fg: '#40230a' },
   localdisk: { bg: '#5f6b7a', mono: 'HD', fg: '#eef2f7' }, // Local disk (non-vendor, neutral gray)
+  comfyui: { bg: '#2b2f3a', mono: 'CU', fg: '#f0d56b' }, // ComfyUI (user-run server; neutral mark, no brand asset)
   localasr: { bg: '#3a7d44', mono: 'ASR', fg: '#eaf5ec' }, // On-device ASR (whisper, non-vendor)
   byteplus: { bg: '#0055FF', mono: 'BP' }, // BytePlus ModelArk, no official SVG vendored yet
   inworld: { bg: '#7A5CFF', mono: 'IW' }, // Inworld TTS, no official SVG vendored yet

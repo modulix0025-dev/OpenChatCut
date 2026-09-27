@@ -245,6 +245,7 @@ export const ROUTE_NEEDS: Record<string, readonly (readonly string[])[]> = {
   'grok-imagine': [['LLM_XAI_OAUTH_API_KEY'], ['LLM_XAI_API_KEY']],
   'grok-imagine-video': [['LLM_XAI_OAUTH_API_KEY'], ['LLM_XAI_API_KEY']],
   ofox: [['LLM_OFOX_API_KEY']],
+  comfyui: [['COMFYUI_BASE_URL', 'COMFYUI_WORKFLOW_DIR']],
   elevenlabs: [['ELEVENLABS_API_KEY']],
   doubao: [['DOUBAO_TTS_APP_ID', 'DOUBAO_TTS_ACCESS_KEY']],
   minimax: [['MINIMAX_API_KEY']],

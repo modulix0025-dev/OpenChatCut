@@ -38,6 +38,12 @@ export function buildSubmitImageArgs(args: GenerateArgs): SubmitImageArgs {
   if (model === 'image-01') {
     return { ...shared, width, height, seed: num(args.seed), promptOptimizer: bool(args.promptOptimizer) };
   }
+  if (model === 'comfyui') {
+    return {
+      ...shared, imageSize: args.imageSize as SubmitImageArgs['imageSize'], seed: num(args.seed),
+      workflow: str(args.workflow), negativePrompt: str(args.negativePrompt),
+    };
+  }
   if (model === 'nano-banana') return { ...shared, imageSize: args.imageSize as SubmitImageArgs['imageSize'] };
   if (model === 'wavespeed' || model === 'byteplus') return { ...shared, imageSize: args.imageSize as SubmitImageArgs['imageSize'], width, height };
   const outputFormat = args.outputFormat as SubmitImageArgs['outputFormat'];
@@ -236,10 +242,16 @@ const falVideo = (args: GenerateArgs): SubmitVideoArgs => {
   });
 };
 
-const VIDEO_STRATEGIES = { fal: falVideo, seedance2: seedanceVideo, kling: klingVideo, hailuo: hailuoVideo, byteplus: byteplusVideo, 'grok-imagine-video': grokVideo, ofox: ofoxVideo } as const;
+// ComfyUI: the workflow manifest decides what is injected; one reference image at most.
+const comfyVideo = (args: GenerateArgs): SubmitVideoArgs => ({
+  ...videoBase(args, 'comfyui'), ratio: str(args.ratio), refImages: list(args.refImages), seed: num(args.seed),
+  workflow: str(args.workflow), negativePrompt: str(args.negativePrompt),
+});
+
+const VIDEO_STRATEGIES = { fal: falVideo, seedance2: seedanceVideo, kling: klingVideo, hailuo: hailuoVideo, byteplus: byteplusVideo, 'grok-imagine-video': grokVideo, ofox: ofoxVideo, comfyui: comfyVideo } as const;
 export function buildSubmitVideoArgs(args: GenerateArgs): SubmitVideoArgs {
   const model = args.model === undefined ? 'seedance2' : args.model;
-  if (model !== 'seedance2' && model !== 'kling' && model !== 'hailuo' && model !== 'byteplus' && model !== 'grok-imagine-video' && model !== 'ofox' && model !== 'fal') {
+  if (model !== 'seedance2' && model !== 'kling' && model !== 'hailuo' && model !== 'byteplus' && model !== 'grok-imagine-video' && model !== 'ofox' && model !== 'fal' && model !== 'comfyui') {
     throw new Error('Unsupported video model; select an available provider before submitting or rerunning.');
   }
   return VIDEO_STRATEGIES[model](args);

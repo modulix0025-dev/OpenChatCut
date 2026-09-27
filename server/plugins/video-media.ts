@@ -24,7 +24,7 @@ export async function mediaDataUrl(path: string): Promise<string> {
   return `data:${mimeFor(file)};base64,${bytes.toString('base64')}`;
 }
 
-function localMedia(path: string): { file: string; name: string } {
+export function localMedia(path: string): { file: string; name: string } {
   const clean = path.split(/[?#]/, 1)[0];
   if (!clean.startsWith('/media/uploads/')) throw new Error(`provider reference must be a project upload: ${path}`);
   const name = clean.slice('/media/uploads/'.length);

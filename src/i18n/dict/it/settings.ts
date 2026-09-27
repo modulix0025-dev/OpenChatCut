@@ -473,6 +473,12 @@ const overrides: Record<string, string> = {
   '打开日志文件夹': 'Apri cartella dei log',
   '单轮超时（秒）': 'Timeout del turno (secondi)',
   '一轮最长运行时间，60–7200 秒。超过 90 秒没有进展时，聊天里会提示正在等待什么。': 'Durata massima di un turno, 60–7200 secondi. Dopo 90 secondi senza progressi la chat indica cosa si sta aspettando.',
+  'ComfyUI 地址': 'Indirizzo ComfyUI',
+  '访问令牌（可选）': 'Token di accesso (facoltativo)',
+  '工作流文件夹': 'Cartella dei workflow',
+  '未设置': 'Non impostato',
+  '存放 API 格式工作流及其 manifest 的文件夹。': 'Cartella con i workflow in formato API e i relativi manifest.',
+  '用你自己的 ComfyUI 工作流生成（本机 http://127.0.0.1:8188，或租用 GPU 服务器的隧道地址）。工作流文件夹里每个工作流是一对文件：<名称>.json（在 ComfyUI 里“导出 (API 格式)”）和 <名称>.manifest.json（说明提示词、种子、尺寸、参考图写入哪个节点，以及输出节点）。详见 README_MODULEX.md。': 'Genera con i tuoi workflow ComfyUI (in locale http://127.0.0.1:8188 o l’indirizzo del tunnel di un server GPU a noleggio). Ogni workflow nella cartella è una coppia di file: <nome>.json (esportato con “Save (API Format)” in ComfyUI) e <nome>.manifest.json (quale nodo riceve prompt, seed, dimensioni e immagine di riferimento, e quale nodo è l’output). Vedi README_MODULEX.md.',
 };
 
 export default overrides;

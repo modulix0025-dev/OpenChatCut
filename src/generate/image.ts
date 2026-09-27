@@ -1,9 +1,13 @@
 import type { MediaAsset, TimelineState } from '../editor/types';
 
 export interface SubmitImageArgs {
-  model?: 'gpt-image-2' | 'nano-banana' | 'image-01' | 'wavespeed' | 'byteplus' | 'grok-imagine' | 'fal';
+  model?: 'gpt-image-2' | 'nano-banana' | 'image-01' | 'wavespeed' | 'byteplus' | 'grok-imagine' | 'fal' | 'comfyui';
   /** Explicit curated Fal model ID; omitted uses the saved Fal default. */
   falModel?: string;
+  /** ComfyUI workflow id or name. */
+  workflow?: string;
+  /** ComfyUI negative prompt. */
+  negativePrompt?: string;
   prompt: string;
   name: string;
   aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3' | '3:4' | '3:2' | '2:3' | '4:5' | '5:4' | '21:9' | 'auto' | '4:1' | '1:4' | '8:1' | '1:8';

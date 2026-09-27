@@ -23,6 +23,8 @@ import {
   localImageAssetPath,
   type ProviderImage,
 } from './image-provider-clients.ts';
+import { generateComfyImages } from './comfyui-provider.ts';
+import { localMedia } from './video-media.ts';
 // Proxy-aware fetch: attaches the configured outbound proxy (keystore
 // PROXY_URL or HTTPS_PROXY/HTTP_PROXY env) via undici dispatcher.
 type FetchInit = Parameters<typeof fetch>[1] & { dispatcher?: unknown };
@@ -60,6 +62,10 @@ interface ImagePluginOptions {
 interface ImageRequest {
   model?: string;
   falModel?: string;
+  /** ComfyUI: workflow id (file name) or name from the workflow folder. */
+  workflow?: string;
+  /** ComfyUI: negative prompt, for workflows that take one. */
+  negativePrompt?: string;
   prompt?: string;
   aspectRatio?: string;
   imageSize?: string;
@@ -80,8 +86,10 @@ interface ImageRequest {
 }
 
 export interface ValidImageRequest {
-  model: 'gpt-image-2' | 'nano-banana' | 'image-01' | 'wavespeed' | 'byteplus' | 'grok-imagine' | 'fal';
+  model: 'gpt-image-2' | 'nano-banana' | 'image-01' | 'wavespeed' | 'byteplus' | 'grok-imagine' | 'fal' | 'comfyui';
   falModel?: string;
+  workflow?: string;
+  negativePrompt?: string;
   falInput?: FalCatalogInput;
   prompt: string;
   aspectRatio?: string;
@@ -147,6 +155,26 @@ function rejectForeignImageOptions(input: ImageRequest, model: ValidImageRequest
 }
 
 /** Pure request validation — exported for unit checks. */
+/** ComfyUI: the workflow decides the style; size, seed and one reference image are injected. */
+function validateComfyImageRequest(input: ImageRequest): ValidImageRequest {
+  const prompt = String(input.prompt ?? '').trim();
+  if (!prompt) throw new Error('prompt is required');
+  const count = input.count ?? 1;
+  if (!Number.isInteger(count) || count < 1 || count > 4) throw new Error('comfyui count must be an integer between 1 and 4');
+  const referencePaths = input.referencePaths ?? [];
+  if (referencePaths.length > 1) throw new Error('comfyui takes at most one reference image');
+  if (input.seed != null && !Number.isSafeInteger(input.seed)) throw new Error('seed must be a safe integer');
+  const aspectRatio = String(input.aspectRatio ?? '1:1');
+  if (!ASPECTS.has(aspectRatio)) throw new Error(`unsupported aspect ratio ${aspectRatio}`);
+  const imageSize = String(input.imageSize ?? '1K');
+  if (!SIZES.has(imageSize)) throw new Error(`unsupported image size ${imageSize}`);
+  return {
+    model: 'comfyui', workflow: input.workflow?.trim() || undefined, negativePrompt: input.negativePrompt,
+    prompt, count, referencePaths, aspectRatio, imageSize, quality: 'high', outputFormat: 'png',
+    ...(input.seed != null ? { seed: input.seed } : {}),
+  };
+}
+
 export function validateImageRequest(input: ImageRequest): ValidImageRequest {
   const model = String(input.model ?? 'gpt-image-2');
   if (model === 'fal') {
@@ -164,6 +192,7 @@ export function validateImageRequest(input: ImageRequest): ValidImageRequest {
       referencePaths: input.referencePaths ?? [], aspectRatio: input.aspectRatio ?? '16:9',
       imageSize: input.imageSize ?? '1K', quality: 'high', outputFormat: 'png' };
   }
+  if (model === 'comfyui') return validateComfyImageRequest(input);
   if (model !== 'gpt-image-2' && model !== 'nano-banana' && model !== 'image-01' && model !== 'wavespeed' && model !== 'byteplus' && model !== 'grok-imagine') {
     throw new Error(`unsupported model ${model}`);
   }
@@ -397,6 +426,11 @@ export function imageGenerationPlugin(options: ImagePluginOptions): Plugin {
           let images: ProviderImage[];
           if (model === 'fal') {
             images = await generateFalCatalogImage(input.falInput!);
+          } else if (model === 'comfyui') {
+            images = await generateComfyImages({
+              workflow: input.workflow, prompt, negativePrompt: input.negativePrompt, seed, count, width, height,
+              imagePath: referencePaths[0] ? localMedia(referencePaths[0]).file : undefined,
+            });
           } else if (model === 'nano-banana') {
             if (!options.geminiApiKey) throw new Error('Nano Banana is not configured. Set GEMINI_API_KEY in .env.local.');
             if (!aspectRatio) throw new Error('Nano Banana requires aspectRatio');

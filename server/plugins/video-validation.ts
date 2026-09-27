@@ -5,9 +5,13 @@ export type KlingVideoReferType = 'feature' | 'base';
 
 export interface VideoRequest {
   operationId?: string;
-  model?: 'seedance2' | 'kling' | 'hailuo' | 'byteplus' | 'grok-imagine-video' | 'ofox' | 'fal';
+  model?: 'seedance2' | 'kling' | 'hailuo' | 'byteplus' | 'grok-imagine-video' | 'ofox' | 'fal' | 'comfyui';
   /** Explicit curated Fal model ID; omitted uses the saved Fal default. */
   falModel?: string;
+  /** ComfyUI: workflow id (file name) or name from the workflow folder. */
+  workflow?: string;
+  /** ComfyUI: negative prompt, for workflows that take one. */
+  negativePrompt?: string;
   prompt?: string;
   name?: string;
   durationSeconds?: number | string;
@@ -37,7 +41,7 @@ export interface VideoRequest {
 }
 
 export interface ValidVideoRequest extends Omit<VideoRequest, 'model' | 'prompt' | 'durationSeconds' | 'ratio' | 'refImagePaths' | 'refVideoPaths' | 'refAudioPaths'> {
-  model: 'seedance2' | 'kling' | 'hailuo' | 'byteplus' | 'grok-imagine-video' | 'ofox' | 'fal';
+  model: 'seedance2' | 'kling' | 'hailuo' | 'byteplus' | 'grok-imagine-video' | 'ofox' | 'fal' | 'comfyui';
   /** Explicit curated Fal model ID; omitted uses the saved Fal default. */
   falModel?: string;
   prompt: string;
@@ -207,6 +211,21 @@ const OFOX_UNSUPPORTED_ARK_KEYS = ['cameraFixed', 'watermark', 'returnLastFrame'
  * first/last-frame and image-reference modes are wired; frame anchors and
  * references are mutually exclusive at the API level (400 references_conflict),
  * enforced locally before any paid submission. */
+/** ComfyUI: the workflow decides what it supports; only map what can be injected. */
+function validateComfy(input: ValidVideoRequest): ValidVideoRequest {
+  if (!input.prompt || input.prompt.length > 20_000) throw new Error('comfyui prompt is required and must be at most 20000 characters');
+  if (input.durationSeconds < 1 || input.durationSeconds > 120) throw new Error('comfyui durationSeconds must be between 1 and 120');
+  if (input.lastFramePath || input.refVideoPaths.length || input.refAudioPaths.length || input.refImagePaths.length > 1) {
+    throw new Error('comfyui takes at most one reference image (firstFrame or one refImage); the workflow manifest decides where it goes');
+  }
+  if (input.firstFramePath && input.refImagePaths.length) throw new Error('comfyui takes firstFrame or one refImage, not both');
+  if (input.mode || input.shotType || input.multiPrompts?.length || input.refVideoMode) {
+    throw new Error('multi-shot and editing options are not supported by comfyui');
+  }
+  if (input.seed !== undefined && !Number.isSafeInteger(input.seed)) throw new Error('seed must be an integer');
+  return input;
+}
+
 function validateOfox(input: ValidVideoRequest): ValidVideoRequest {
   if (!input.prompt || input.prompt.length > 4000) throw new Error('ofox prompt is required and must be at most 4000 characters');
   if (input.durationSeconds < 2 || input.durationSeconds > 30) throw new Error('ofox durationSeconds must be between 2 and 30 (per-model limits are enforced by the API)');
@@ -246,8 +265,9 @@ export function validateVideoRequest(input: VideoRequest): ValidVideoRequest {
     buildFalCatalogVideoRequest(falVideoCatalogInput(normalized));
     return normalized;
   }
+  if (input.model === 'comfyui') return validateComfy(common(input, 'comfyui'));
   if (input.model !== 'seedance2' && input.model !== 'kling' && input.model !== 'hailuo' && input.model !== 'byteplus' && input.model !== 'grok-imagine-video' && input.model !== 'ofox') {
-    throw new Error('model must be seedance2, kling, hailuo, byteplus, grok-imagine-video, ofox, or fal');
+    throw new Error('model must be seedance2, kling, hailuo, byteplus, grok-imagine-video, ofox, fal, or comfyui');
   }
   if (input.model === 'hailuo' && input.ratio !== undefined) throw new Error('hailuo does not accept ratio; framing follows the first frame when present');
   const normalized = common(input, input.model);

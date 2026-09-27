@@ -19,6 +19,7 @@ import {
   mediaDataUrl,
   providerMediaUrl,
   ServerReferencePreflightError,
+  localMedia,
 } from './video-media.ts';
 import { generateGrokVideo } from './grok-video-provider.ts';
 import { hailuoRequestBody } from './minimax-video.ts';
@@ -28,6 +29,8 @@ import {
   seedanceApiResolution, validateVideoRequest, validateSavedVideoRequest, videoSeconds,
   type KlingVideoReferType, type ValidVideoRequest, type VideoRequest,
 } from './video-validation.ts';
+import { comfyDimensions, comfySettings, generateComfyVideo, stripVideoMetadata } from './comfyui-provider.ts';
+import { comfyFetch } from './comfyui-client.ts';
 export { hailuoApiResolution, seedanceApiResolution, validateVideoRequest } from './video-validation.ts';
 // Attach the configured outbound proxy through undici.
 type FetchInit = Parameters<typeof fetch>[1] & { dispatcher?: unknown };
@@ -344,6 +347,18 @@ async function runVideoOperation(
   if (!checkpoint.complete) {
     if (providerTaskId?.startsWith('fal:') || (!providerTaskId && input.model === 'fal')) {
       urls = requireGenerationResultUrls([await generateFalVideo(input, registerProviderTask, providerTaskId)], expectedResultCount);
+    } else if (providerTaskId?.startsWith('comfyui:') || input.model === 'comfyui') {
+      const reference = input.firstFramePath ?? input.refImagePaths[0];
+      const size = comfyDimensions(input.ratioSpecified ? input.ratio : undefined, input.resolution);
+      urls = requireGenerationResultUrls([await generateComfyVideo({
+        workflow: input.workflow,
+        prompt: input.prompt,
+        negativePrompt: input.negativePrompt,
+        seed: input.seed,
+        durationSeconds: input.durationSpecified ? input.durationSeconds : undefined,
+        ...(size ?? {}),
+        imagePath: reference ? localMedia(reference).file : undefined,
+      }, registerProviderTask, providerTaskId)], expectedResultCount);
     } else if (input.model === 'seedance2' || input.model === 'byteplus') {
       const generated = await generateSeedance(input, seedanceConfig(input.model, options), registerProviderTask, providerTaskId);
       if (input.returnLastFrame && !generated.lastFrameUrl) {
@@ -365,19 +380,28 @@ async function runVideoOperation(
     }
   }
   urls = requireGenerationResultUrls(urls, expectedResultCount);
-  const resultFetch = input.model === 'grok-imagine-video' || input.model === 'ofox' ? fetchWithProxy : undefined;
-  const download = () => saveVideoResults(
+  const resultFetch = input.model === 'grok-imagine-video' || input.model === 'ofox' ? fetchWithProxy
+    : input.model === 'comfyui' ? comfyFetch(comfySettings()) : undefined;
+  const saveResults = () => saveVideoResults(
     operationId,
     name,
     urls[0],
     (input.model === 'seedance2' || input.model === 'byteplus') && input.returnLastFrame ? urls[1] : undefined,
     resultFetch,
   );
+  // ComfyUI renders carry the whole workflow as metadata; keep the media only.
+  const download = input.model !== 'comfyui' ? saveResults : async () => {
+    const saved = await saveResults();
+    for (const result of Array.isArray(saved) ? saved : [saved]) {
+      if (result.kind === 'video') await stripVideoMetadata(localMedia(result.path).file);
+    }
+    return saved;
+  };
   for (const [index, url] of urls.entries()) await registerDownload(url, download, index);
   return download();
 }
 export function videoGenerationPlugin(options: VideoOptions): Plugin {
-  for (const provider of ['seedance2', 'kling', 'hailuo', 'byteplus', 'grok-imagine-video', 'ofox', 'fal'] as const) {
+  for (const provider of ['seedance2', 'kling', 'hailuo', 'byteplus', 'grok-imagine-video', 'ofox', 'fal', 'comfyui'] as const) {
     registerGenerationJobResumer('submit_video', provider, async (
       snapshot: GenerationJobSnapshot,
       _update,
