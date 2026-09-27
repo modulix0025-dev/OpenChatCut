@@ -24,8 +24,24 @@ import {
   recallClaudeCodeSession,
   rememberClaudeCodeSession,
 } from '../claude-code/resume-store.ts';
+import { toolResultText } from '../claude-code/turn-runner.ts';
+import { getKey } from '../keystore.ts';
 
-const CLAUDE_CODE_TURN_TIMEOUT_MS = 600_000;
+const DEFAULT_TURN_TIMEOUT_SECONDS = 600;
+
+/** Overall limit for one Claude Code turn: CLAUDE_CODE_TURN_TIMEOUT_SECONDS
+ *  (60 s – 2 h), default 10 minutes. */
+export function claudeCodeTurnTimeoutMs(setting: string = getKey('CLAUDE_CODE_TURN_TIMEOUT_SECONDS')): number {
+  const seconds = Number(setting);
+  if (!setting.trim() || !Number.isFinite(seconds)) return DEFAULT_TURN_TIMEOUT_SECONDS * 1000;
+  return Math.round(Math.min(7200, Math.max(60, seconds)) * 1000);
+}
+
+/** Why a tool failed, as the CLI reported it, for the chat. */
+function toolFailureReason(result: unknown): string {
+  const text = toolResultText(result).trim();
+  return text ? text.slice(0, 500) : 'Claude Code tool call failed.';
+}
 
 export interface ServerClaudeCodeTurnInput {
   readonly run: ServerRun;
@@ -244,7 +260,7 @@ export async function executeServerClaudeCodeTurn(
           toolCallId: event.callId,
           toolName: event.name,
           argsDigest: digestToolArgs((args ?? {}) as Record<string, unknown>),
-          ...(event.success ? { result: event.result } : { error: 'Claude Code tool call failed.' }),
+          ...(event.success ? { result: event.result } : { error: toolFailureReason(event.result) }),
         });
         break;
       }
@@ -258,6 +274,9 @@ export async function executeServerClaudeCodeTurn(
         break;
       case 'error':
         errorMessage = event.message;
+        break;
+      case 'notice':
+        pushRunEvent(input.run, 'notice', { text: event.message });
         break;
       case 'done':
         done = true;
@@ -297,7 +316,7 @@ export async function executeServerClaudeCodeTurn(
         },
         emit,
         controller.signal,
-      ), CLAUDE_CODE_TURN_TIMEOUT_MS, () => controller.abort());
+      ), claudeCodeTurnTimeoutMs(), () => controller.abort());
     } catch (error) {
       turnError = error;
     } finally {

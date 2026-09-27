@@ -75,4 +75,7 @@ export type ClaudeCodeTurnStreamEvent =
       readonly cacheReadTokens?: number;
     }
   | { readonly type: 'error'; readonly message: string }
+  // Shown to the user as a chat note, never added to the model's transcript:
+  // a denied tool, or a turn that has gone quiet while waiting on something.
+  | { readonly type: 'notice'; readonly message: string }
   | { readonly type: 'done' };

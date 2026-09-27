@@ -252,7 +252,7 @@ function sequence(events: readonly ClaudeCodeTurnStreamEvent[]): ServerClaudeCod
   await flushRunPersistence(run);
   const result = run.events.find((event) => event.type === 'tool-result');
   const resultData = result!.data as { error?: string };
-  assert.equal(resultData.error, 'Claude Code tool call failed.');
+  assert.equal(resultData.error, 'media is unavailable', 'the failure reason reaches the chat');
   assert.ok(outcome.messages.some((message) => String(message.content).includes('success=false')),
     'failure is persisted in the tool history');
 }
@@ -415,6 +415,33 @@ console.log('server agent claude-code turn verification passed');
     },
   });
   assert.equal(requests[2].sessionId, undefined, 'a failed turn forgets the session id');
+}
+
+// ── Denials and quiet turns reach the chat; failures keep their reason ──────
+{
+  const run = makeRun();
+  await executeServerClaudeCodeTurn(makeInput(run), sequence([
+    { type: 'tool-start', callId: 'c1', name: 'mcp__openchatcut__generate_video', args: {} },
+    { type: 'notice', message: 'Claude Code was not allowed to use mcp__openchatcut__generate_video: not granted' },
+    { type: 'tool-end', callId: 'c1', name: 'mcp__openchatcut__generate_video', args: {}, success: false,
+      result: [{ type: 'text', text: 'provider rejected the prompt: safety filter' }] },
+    { type: 'done' },
+  ]));
+  await flushRunPersistence(run);
+  const notice = run.events.find((event) => event.type === 'notice');
+  assert.match(String((notice?.data as { text?: unknown })?.text), /not allowed to use mcp__openchatcut__generate_video/,
+    'a notice becomes a chat note event');
+  const failed = run.events.find((event) => event.type === 'tool-result');
+  assert.equal((failed?.data as { error?: unknown })?.error, 'provider rejected the prompt: safety filter',
+    'a failed tool shows why it failed, not a generic message');
+}
+{
+  const { claudeCodeTurnTimeoutMs } = await import('./claude-code-turn');
+  assert.equal(claudeCodeTurnTimeoutMs(''), 600_000, 'default 10 minutes');
+  assert.equal(claudeCodeTurnTimeoutMs('1800'), 1_800_000);
+  assert.equal(claudeCodeTurnTimeoutMs('5'), 60_000, 'at least a minute');
+  assert.equal(claudeCodeTurnTimeoutMs('999999'), 7_200_000, 'at most two hours');
+  assert.equal(claudeCodeTurnTimeoutMs('abc'), 600_000);
 }
 
 console.log('claude-code-turn.verify: session resume, fallback and invalidation passed');

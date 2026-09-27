@@ -471,6 +471,8 @@ const overrides: Record<string, string> = {
   '上次移动工程存储目录失败，仍在使用原目录 {from}：{error}': 'L’ultimo spostamento della cartella non è riuscito; in uso ancora {from}: {error}',
   '未知': 'sconosciuto',
   '打开日志文件夹': 'Apri cartella dei log',
+  '单轮超时（秒）': 'Timeout del turno (secondi)',
+  '一轮最长运行时间，60–7200 秒。超过 90 秒没有进展时，聊天里会提示正在等待什么。': 'Durata massima di un turno, 60–7200 secondi. Dopo 90 secondi senza progressi la chat indica cosa si sta aspettando.',
 };
 
 export default overrides;

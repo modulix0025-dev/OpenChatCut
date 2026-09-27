@@ -185,6 +185,19 @@ if (prompt.startsWith('hang-forever:')) {
   process.stdout.write(JSON.stringify({ type: 'system', subtype: 'init', session_id: 'fake-session-hang' }) + '\n');
   writeFileSync(prompt.slice('hang-forever:'.length), String(process.pid));
   setInterval(() => {}, 1000);
+} else if (prompt === 'deny-then-quiet') {
+  const send = (event) => process.stdout.write(JSON.stringify(event) + '\n');
+  send({ type: 'system', subtype: 'init', session_id: 'fake-session-deny' });
+  send({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'mcp__openchatcut__generate_video', input: {} }] } });
+  send({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't1', is_error: true,
+    content: "Claude requested permissions to use mcp__openchatcut__generate_video, but you haven't granted it yet." }] } });
+  send({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 't2', name: 'mcp__openchatcut__export_video', input: {} }] } });
+  setTimeout(() => {
+    send({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't2', content: 'exported' }] } });
+    send({ type: 'result', subtype: 'success', result: 'done', is_error: false,
+      permission_denials: [{ tool_name: 'mcp__openchatcut__generate_video', tool_use_id: 't1' }] });
+    process.exit(0);
+  }, 700);
 } else if (prompt !== 'trigger-error') {
   const send = (event) => process.stdout.write(JSON.stringify(event) + '\n');
   send({ type: 'system', subtype: 'init', session_id: 'fake-session-1' });
@@ -253,6 +266,31 @@ try {
       !events.some((event) => event.type === 'error'),
       'no ENAMETOOLONG (or any spawn error) for an oversized system prompt',
     );
+  }
+  {
+    // A denied tool is reported at once, and a quiet stretch says what the
+    // turn is waiting on, instead of the chat spinning until the timeout.
+    const events: ClaudeCodeTurnStreamEvent[] = [];
+    await runClaudeCodeTurn(
+      shimPath,
+      { requestId: 'req-deny', system: 'sys', prompt: 'deny-then-quiet', projectId: 'proj-1' },
+      'http://127.0.0.1:1/api/external-mcp/mcp',
+      'fake-token',
+      (event) => events.push(event),
+      new AbortController().signal,
+      200,
+    );
+    const notices = events.filter((event) => event.type === 'notice').map((event) => (event as { message: string }).message);
+    assert.match(notices[0] ?? '', /not allowed to use mcp__openchatcut__generate_video: Claude requested permissions/,
+      'the denial is reported immediately with the tool and the reason');
+    const denialAt = events.findIndex((event) => event.type === 'notice');
+    const failedAt = events.findIndex((event) => event.type === 'tool-end' && !event.success);
+    assert.ok(denialAt >= 0 && denialAt < failedAt, 'the notice comes with the failed tool result, not at the end');
+    assert.ok(notices.some((text) => /No progress for \d+ s: waiting on mcp__openchatcut__export_video/.test(text)),
+      'a quiet turn names the tool it is waiting on');
+    assert.ok(notices.some((text) => /not allowed to use mcp__openchatcut__generate_video in this turn/.test(text)),
+      'the summary denial list is reported too');
+    assert.equal(events.at(-1)?.type, 'done');
   }
   {
     const events: ClaudeCodeTurnStreamEvent[] = [];

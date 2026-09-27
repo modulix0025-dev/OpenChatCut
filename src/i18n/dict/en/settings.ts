@@ -635,4 +635,6 @@ export default {
   '上次移动工程存储目录失败，仍在使用原目录 {from}：{error}': 'The last storage folder move failed; still using {from}: {error}',
   '未知': 'unknown',
   '打开日志文件夹': 'Open logs folder',
+  '单轮超时（秒）': 'Turn timeout (seconds)',
+  '一轮最长运行时间，60–7200 秒。超过 90 秒没有进展时，聊天里会提示正在等待什么。': 'Longest time one turn may run, 60–7200 seconds. After 90 seconds without progress the chat says what the turn is waiting on.',
 } as Record<string, string>;

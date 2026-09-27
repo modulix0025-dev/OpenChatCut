@@ -126,6 +126,25 @@ interface PendingToolUse {
 }
 
 /** Translates one parsed stream-json line into zero or more display events. Exported for verify tests. */
+/** Plain text of a tool_result's content (string or text blocks). */
+export function toolResultText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  return array(content)
+    .map((block) => record(block))
+    .map((block) => (block && typeof block.text === 'string' ? block.text : ''))
+    .filter(Boolean)
+    .join('\n');
+}
+
+const DENIAL_PATTERN = /permission|not allowed|denied|requires approval|haven't granted|has not been granted/i;
+
+/** A user-facing note when the CLI refused a tool, or null for ordinary failures. */
+export function denialNotice(toolName: string, content: unknown): string | null {
+  const text = toolResultText(content).trim();
+  if (!text || !DENIAL_PATTERN.test(text)) return null;
+  return `Claude Code was not allowed to use ${toolName}: ${text.slice(0, 400)}`;
+}
+
 export function translateClaudeCodeLine(
   line: Record<string, unknown>,
   pendingTools: Map<string, PendingToolUse>,
@@ -174,6 +193,8 @@ export function translateClaudeCodeLine(
       if (!b || b.type !== 'tool_result' || typeof b.tool_use_id !== 'string') continue;
       const pending = pendingTools.get(b.tool_use_id);
       pendingTools.delete(b.tool_use_id);
+      const denied = b.is_error === true ? denialNotice(pending?.name ?? 'a tool', b.content) : null;
+      if (denied) events.push({ type: 'notice', message: denied });
       events.push({
         type: 'tool-end',
         callId: b.tool_use_id,
@@ -199,6 +220,12 @@ export function translateClaudeCodeLine(
           ? modelUsage.cacheReadInputTokens : undefined,
       });
     }
+    // Denials the CLI reports only in its summary (not as a tool result).
+    const denials = array(line.permission_denials).map((entry) => record(entry)).filter((entry) => entry);
+    if (denials.length) {
+      const names = [...new Set(denials.map((entry) => String(entry!.tool_name ?? 'a tool')))];
+      events.push({ type: 'notice', message: `Claude Code was not allowed to use ${names.join(', ')} in this turn.` });
+    }
     if (line.is_error === true || line.subtype !== 'success') {
       const message = typeof line.result === 'string' && line.result
         ? line.result
@@ -210,6 +237,9 @@ export function translateClaudeCodeLine(
   }
   return events;
 }
+
+/** Quiet time after which the chat is told what the turn is waiting on. */
+export const CLAUDE_CODE_IDLE_NOTICE_MS = 90_000;
 
 /** The private MCP config this turn hands the CLI. Exported for verify tests. */
 export function claudeCodeMcpConfig(
@@ -263,6 +293,7 @@ export async function runClaudeCodeTurn(
   mcpToken: string,
   emit: (event: ClaudeCodeTurnStreamEvent) => void,
   signal: AbortSignal,
+  idleNoticeMs = CLAUDE_CODE_IDLE_NOTICE_MS,
 ): Promise<void> {
   if (signal.aborted) return;
   await withTempMcpConfig(mcpUrl, mcpToken, request.approvalMode, async (mcpConfigPath) => {
@@ -312,6 +343,22 @@ export async function runClaudeCodeTurn(
     });
     const pendingTools = new Map<string, PendingToolUse>();
     let sawResult = false;
+    // A quiet turn usually means a tool is waiting on something (an approval
+    // in the editor, a slow provider). Say so instead of spinning silently.
+    let lastActivity = Date.now();
+    let idleNotified = false;
+    const idleTimer = setInterval(() => {
+      const quietMs = Date.now() - lastActivity;
+      if (idleNotified || quietMs < idleNoticeMs) return;
+      idleNotified = true;
+      const waiting = [...pendingTools.values()].map((tool) => tool.name);
+      emit({
+        type: 'notice',
+        message: waiting.length
+          ? `No progress for ${Math.round(quietMs / 1000)} s: waiting on ${waiting.join(', ')}. If it needs your approval, look for the request in the editor.`
+          : `No progress from Claude Code for ${Math.round(quietMs / 1000)} s; still waiting for the model.`,
+      });
+    }, Math.min(5_000, idleNoticeMs));
     let stderrTail = '';
     const onAbort = () => { child.kill(); };
     signal.addEventListener('abort', onAbort, { once: true });
@@ -331,6 +378,8 @@ export async function runClaudeCodeTurn(
         }
         const record_ = record(parsed);
         if (!record_) continue;
+        lastActivity = Date.now();
+        idleNotified = false;
         if (record_.type === 'result') sawResult = true;
         for (const event of translateClaudeCodeLine(record_, pendingTools)) emit(event);
       }
@@ -347,6 +396,7 @@ export async function runClaudeCodeTurn(
         }
       }
     } finally {
+      clearInterval(idleTimer);
       signal.removeEventListener('abort', onAbort);
       rl.close();
       if (!child.killed) child.kill();

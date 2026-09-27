@@ -108,6 +108,10 @@ const CLAUDE_CODE_PAGE: SettingsVendorPage = {
       name: 'CLAUDE_CODE_EXTRA_MODELS', label: '额外模型', kind: 'text',
       note: '列表中没有的模型 ID，用逗号分隔（如 claude-opus-5-5）。保存后点击“读取模型”即可选择。',
     },
+    {
+      name: 'CLAUDE_CODE_TURN_TIMEOUT_SECONDS', label: '单轮超时（秒）', kind: 'text', defaultLabel: '600',
+      note: '一轮最长运行时间，60–7200 秒。超过 90 秒没有进展时，聊天里会提示正在等待什么。',
+    },
   ],
 };
 

@@ -182,6 +182,13 @@ function bindCompletionEvents(
       handlers.appendMessage({ role: 'continue', text: String(data.turns) });
     });
   });
+  source.addEventListener('notice', (event) => {
+    const data = eventData(event);
+    if (!objectRecord(data) || typeof data.text !== 'string' || !data.text.trim()) return;
+    handleCommit(commitEvent(event, handlers), runId, handlers, () => {
+      handlers.appendMessage({ role: 'note', text: data.text as string });
+    });
+  });
   source.addEventListener('tool-failures', (event) => {
     const data = eventData(event);
     if (!objectRecord(data)) return;
