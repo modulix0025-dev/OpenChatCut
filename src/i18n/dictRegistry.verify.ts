@@ -77,8 +77,8 @@ function onlyIn(has: Record<string, string>, lacks: Record<string, string>): str
   const russian = Object.keys(RU)[0]!;
   assert.equal(t(russian), RU[russian], 'ru reads the Russian dictionary');
   const englishOnly = onlyIn(EN, RU);
-  assert.equal(t(englishOnly), englishOnly,
-    'an untranslated key stays Chinese in ru — it must NOT fall back to English');
+  assert.equal(t(englishOnly), EN[englishOnly],
+    'an untranslated key falls back to English in ru, never to the Chinese key');
   const dataKey = Object.keys(EN_DATA)[0]!;
   assert.equal(tData(dataKey), EN_DATA[dataKey], 'ru data names still read EN_DATA');
 }
