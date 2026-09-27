@@ -47,7 +47,7 @@ Severity reflects impact in the desktop product before this change.
 | # | Severity | Finding (before) | Fix |
 |---|---|---|---|
 | F1 | **Critical** | Any agent prompt injection (web page, transcript, skill text), external MCP client or renderer script could run arbitrary programs: `/api/skills/<slug>/exec` allowed `npx`/`npm`/`uvx`, `bash SKILL.md` (agent-writable), `node --import=data:…`, with no approval | Default-deny capability broker + native dialog; `PROCESS_EXECUTION` grant per exact command line; SKILL.md not executable; node preload flags blocked; realpath check on scripts; reviewable-length cap (`server/plugins/skill-exec.ts`) |
-| F2 | **High** | Template (motion-graphic) code from projects, plugin URLs and the agent ran in the editor renderer behind a regex blocklist. Trivial escapes: bare `openChatCutDesktop`, `x['constr'+'uctor']`, DOM ref → `ownerDocument.defaultView`, `<iframe srcDoc>`, `dangerouslySetInnerHTML` handlers; later review: class component → React fiber | AST capability guard (`src/template-guard.ts`): identifier allowlist, denied keys incl. `_`-prefixed/fiber fields, runtime guard on computed keys; element filter (no script/iframe/object/…; markup must be inert; DOM refs only on `<canvas>`; no class/exotic components); React API reduced; CSP |
+| F2 | **High** | Template (motion-graphic) code from projects, plugin URLs and the agent ran in the editor renderer behind a regex blocklist. Trivial escapes: bare `openChatCutDesktop`, `x['constr'+'uctor']`, DOM ref → `ownerDocument.defaultView`, `<iframe srcDoc>`, `dangerouslySetInnerHTML` handlers; later review: class component → React fiber | AST capability guard (`src/template-guard.ts`): identifier allowlist, denied keys incl. `_`-prefixed/fiber fields, runtime guard on computed keys; element filter (no script/iframe/object/…; markup must be inert; DOM refs only on `<canvas>`; no class components; only trusted Remotion forwardRef components, memo of function components and context objects; refused components render a visible error instead of nothing); React API reduced; CSP |
 | F3 | **High** | No CSP; renderer not sandboxed; devtools available in production | CSP without inline/remote script (`desktop/content-security-policy.ts`); `sandbox:true` and related `webPreferences`; devtools disabled when packaged; global web-contents guards; default-deny permission handlers (`desktop/security-policy.ts`) |
 | F4 | **High** | Embedded server trusted any request with loopback-looking headers: other local processes/OS users could drive every API (incl. F1) and fetch the MCP token; DNS-rebinding pages could read GET routes, including `/llm/*` with provider keys injected | Front-door gate: Host allowlist + per-launch HttpOnly SameSite=Strict session cookie on every request; MCP bearer and phone-upload hand-off pass through to their own checks (`desktop/embedded-request-gate.ts`) |
 | F5 | **High** | Agent/MCP local file access unrestricted by default (`AGENT_IMPORT_ROOTS` empty = everything); `browse_local_media` listed the whole disk; symlink named `x.svg` imported any file | Default deny; access only to folders picked in the native picker; kind from the real target; UNC/device/ADS/reserved-name rejection (`server/local-path-import.ts`, `server/security/local-path-safety.ts`, `desktop/agent-folder-grant-ipc.ts`) |
@@ -119,9 +119,13 @@ scrubbing, which is tested.
   external-agent auto-approval show a permission dialog.
 - In-app "download and install update" is replaced by the release page link
   in unsigned builds.
-- Templates that relied on class components, React internals or DOM refs on
-  non-canvas elements render those parts as nothing. All 235 bundled templates
-  compile and render unchanged.
+- Templates that use class components or other unsupported component types
+  show a visible "Template error" label in place of that component. DOM refs on
+  non-canvas elements are dropped. All 235 bundled templates compile.
+- Correction: the first hardened build (0.2.14, commit 60878bf) also refused
+  Remotion's own `AbsoluteFill`, `Sequence`, `Video`, `Audio` and `Img`, which
+  are forwardRef objects, so scenes built on them rendered blank without an
+  error. Fixed by trusting those components by reference, with a render test.
 
 ## 6. Remaining known risks
 

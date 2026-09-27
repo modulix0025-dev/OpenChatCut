@@ -27,6 +27,7 @@ import * as React from 'react';
 import {
   useCurrentFrame, useVideoConfig, interpolate, interpolateColors,
   spring, Easing, random, Img as RemotionImg, Video, Audio, Sequence, AbsoluteFill, staticFile,
+  OffthreadVideo, Series, Loop, Freeze,
 } from 'remotion';
 import {
   TEMPLATE_KEY_GUARD,
@@ -91,11 +92,57 @@ export function isInertTemplateMarkup(html: unknown): boolean {
   return true;
 }
 
+// Remotion's render components are forwardRef objects, not plain functions.
+// They are trusted by reference: templates cannot create forwardRef objects
+// themselves (React.forwardRef is hidden below).
+const TRUSTED_COMPONENT_OBJECTS: ReadonlySet<unknown> = new Set<unknown>([
+  AbsoluteFill, Sequence, Video, Audio, RemotionImg, OffthreadVideo, Series, Series.Sequence, Loop, Freeze,
+]);
+const REACT_MEMO = Symbol.for('react.memo');
+const REACT_CONTEXT = Symbol.for('react.context');
+const REACT_CONSUMER = Symbol.for('react.consumer');
+const REACT_PROVIDER = Symbol.for('react.provider');
+
+const isClassComponent = (type: unknown): boolean =>
+  typeof type === 'function' && Boolean((type as { prototype?: { render?: unknown } }).prototype?.render);
+
+/** Why an element type is refused, or null when it may render. */
+export function rejectedTemplateComponent(type: unknown): string | null {
+  if (typeof type === 'string' || typeof type === 'symbol') return null; // host elements, Fragment
+  // A class instance would carry its fiber, which leads to the whole editor tree.
+  if (isClassComponent(type)) return 'class components are not supported; use a function component';
+  if (typeof type === 'function') return null;
+  if (type === null || typeof type !== 'object') return 'not a component';
+  if (TRUSTED_COMPONENT_OBJECTS.has(type)) return null;
+  const tag = (type as { $$typeof?: unknown }).$$typeof;
+  // React.memo(fn) around a template's own function component.
+  if (tag === REACT_MEMO) return rejectedTemplateComponent((type as { type?: unknown }).type);
+  if (tag === REACT_CONTEXT || tag === REACT_CONSUMER || tag === REACT_PROVIDER) return null;
+  return 'this component type is not supported in templates';
+}
+
+function componentName(type: unknown): string {
+  const t = type as { displayName?: unknown; name?: unknown; render?: { name?: unknown }; type?: { name?: unknown } } | null;
+  const name = t?.displayName ?? t?.name ?? t?.render?.name ?? t?.type?.name;
+  return typeof name === 'string' && name ? name : 'anonymous';
+}
+
+/** Visible stand-in for a refused component, so a template never goes blank silently. */
+function templateComponentError(type: unknown, reason: string): React.ReactElement {
+  const message = `Template error: <${componentName(type)}> cannot render (${reason})`;
+  console.error(`[template] ${message}`);
+  return React.createElement('div', {
+    'data-template-error': 'true',
+    style: {
+      position: 'absolute', left: 8, top: 8, padding: '6px 10px', maxWidth: '90%',
+      background: 'rgba(160, 0, 0, 0.85)', color: '#fff', font: '14px/1.4 sans-serif', borderRadius: 4, zIndex: 2147483647,
+    },
+  }, message);
+}
+
 const createElementSafe = ((type: unknown, props: unknown, ...children: unknown[]) => {
-  // Components must be plain functions: a class (anything with a prototype
-  // render method) would receive a fiber-bearing instance.
-  if (typeof type === 'function' && (type as { prototype?: { render?: unknown } }).prototype?.render) return null;
-  if (type !== null && typeof type === 'object') return null; // lazy/memo/portal objects are not template API
+  const rejected = rejectedTemplateComponent(type);
+  if (rejected) return templateComponentError(type, rejected);
   // A ref hands the live DOM node to template code; only <canvas> (2D drawing)
   // legitimately needs one.
   if (typeof type === 'string' && type.toLowerCase() !== 'canvas' && props && typeof props === 'object' && 'ref' in props) {
@@ -150,6 +197,7 @@ const HostReact = new Proxy(React, {
 const WHITELIST: Record<string, unknown> = {
   React: HostReact, useCurrentFrame, useVideoConfig, interpolate, interpolateColors,
   spring, Easing, random, Img, Video, Audio, Sequence, AbsoluteFill, staticFile,
+  OffthreadVideo, Series, Loop, Freeze,
 };
 
 // Everything reachable that a template must NOT touch → shadowed to undefined.
@@ -265,6 +313,9 @@ export function getCompiledTemplate(code: string): MgComponent {
   if (!compiled) throw new Error('template: 尚未完成编译');
   return compiled;
 }
+
+/** Tests only: the globals injected into every template. */
+export const templateGlobalNamesForTests = (): string[] => Object.keys(WHITELIST);
 
 /** Tests only: the element filter applied to every createElement in templates. */
 export const createElementSafeForTests = createElementSafe;

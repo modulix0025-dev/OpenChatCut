@@ -127,12 +127,48 @@ void refs;
 {
   const { createElementSafeForTests } = await import('./template-host');
   class Hostile extends React.Component { render() { return null; } }
-  assert.equal(createElementSafeForTests(Hostile as never, null), null, 'class components render nothing');
-  assert.equal(createElementSafeForTests(React.memo(() => null) as never, null), null, 'exotic element objects render nothing');
+  const isErrorBox = (el: unknown) =>
+    (el as React.ReactElement<Record<string, unknown>>)?.props?.['data-template-error'] === 'true';
+  assert.ok(isErrorBox(createElementSafeForTests(Hostile as never, null)), 'class components render a visible error, never an instance');
+  assert.ok(isErrorBox(createElementSafeForTests(React.lazy(async () => ({ default: () => null })) as never, null)),
+    'lazy objects are refused visibly');
+  assert.ok(isErrorBox(createElementSafeForTests(React.memo(Hostile) as never, null)), 'memo cannot smuggle a class component');
+  // Remotion's render components are forwardRef objects and must render (issue: blank AbsoluteFill scenes).
+  const remotion = await import('remotion');
+  for (const name of ['AbsoluteFill', 'Sequence', 'Video', 'Audio', 'Img', 'OffthreadVideo', 'Series', 'Loop', 'Freeze'] as const) {
+    const el = createElementSafeForTests(remotion[name] as never, null) as unknown as React.ReactElement;
+    assert.equal(el.type, remotion[name], `${name} renders as itself`);
+  }
+  const memoFn = React.memo(() => null);
+  assert.equal((createElementSafeForTests(memoFn as never, null) as unknown as React.ReactElement).type, memoFn,
+    'React.memo around a function component renders');
   const canvas = createElementSafeForTests('canvas', { ref: () => undefined }) as unknown as React.ReactElement<Record<string, unknown>>;
   assert.ok(canvas.props.ref !== undefined || (canvas as unknown as { ref?: unknown }).ref !== undefined, '<canvas> keeps its ref for 2D drawing');
   const div = createElementSafeForTests('div', { ref: () => undefined }) as unknown as React.ReactElement<Record<string, unknown>>;
   assert.equal(div.props.ref, undefined, 'other host elements never receive a live DOM ref');
+}
+
+// Rendering, not just compiling: a scene rooted in <AbsoluteFill> (the shape
+// the built-in motion-graphics generator writes) must produce its content, and
+// every bundled template must render something without a template error.
+{
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const scene = await prepareTemplate(`const Scene = ({ item }) => (
+    <AbsoluteFill style={{ backgroundColor: '#123456' }}>
+      <div className="headline">KidX</div>
+    </AbsoluteFill>
+  );`);
+  const html = renderToStaticMarkup(React.createElement(scene, { item: { props: {}, width: 1080, height: 1350 } }));
+  assert.match(html, /KidX/, 'AbsoluteFill-rooted scene renders its content');
+  assert.doesNotMatch(html, /data-template-error/, 'no template error for Remotion components');
+}
+
+// The generator prompt and the sandbox share one list of template globals.
+{
+  const { TEMPLATE_GLOBAL_NAMES } = await import('./template-api');
+  const { templateGlobalNamesForTests } = await import('./template-host');
+  assert.deepEqual([...templateGlobalNamesForTests()].sort(), [...TEMPLATE_GLOBAL_NAMES].sort(),
+    'template-host injects exactly the globals template-api advertises');
 }
 
 // The regex layer still catches the classic forms.

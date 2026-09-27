@@ -7,6 +7,7 @@ import { generateAgentText } from '../client';
 import { designStyleHint } from '../systemPrompt';
 import { execCoreDataTool } from './core-data-tools';
 import { execJianyingExport } from './jianying-export-tool';
+import { TEMPLATE_COMPONENT_RULES, TEMPLATE_GLOBAL_NAMES } from '../../template-api';
 
 type Args = Record<string, unknown>;
 
@@ -76,7 +77,8 @@ async function generateMgCode(description: string, brandHint = ''): Promise<stri
   const system = `You write ONE Remotion motion-graphic React component. Output ONLY the code — no markdown fences, no prose.
 Contract (MUST follow exactly):
 - Shape: const Name = ({item}) => { ...; return (<AbsoluteFill>...</AbsoluteFill>); };
-- NO import / require / export. These globals are already injected: React, useCurrentFrame, useVideoConfig, interpolate, interpolateColors, spring, Easing, random, Img, Audio, Sequence, AbsoluteFill.
+- NO import / require / export. These globals are already injected: ${TEMPLATE_GLOBAL_NAMES.join(', ')}.
+- ${TEMPLATE_COMPONENT_RULES}
 - Canvas is 1920x1080. Animate with useCurrentFrame()+interpolate()/spring({fps,frame,config}). Get { fps, durationInFrames } from useVideoConfig().
 - interpolate()'s inputRange MUST be strictly increasing (e.g. [0, 15, 30]). When breakpoints are computed (per-item offsets, durationInFrames fractions), clamp with Math.max(prev + 1, next) so a later value can never be <= an earlier one — a non-monotonic inputRange throws at render time.
 - Pure, synchronous rendering only. FORBIDDEN: fetch, XMLHttpRequest, WebSocket, document, window, globalThis, eval, new Function, .constructor, localStorage, setTimeout, setInterval, while(true), for(;;), debugger.
