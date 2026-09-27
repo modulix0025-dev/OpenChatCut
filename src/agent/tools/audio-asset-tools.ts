@@ -27,6 +27,32 @@ function commandAudio(asset: ReturnType<typeof availableAudio>[number]): AudioAs
   };
 }
 
+/** Real duration of a project file via the app's ffprobe, or null when unknown. */
+async function probedDurationFrames(src: string, fps: number): Promise<number | null> {
+  try {
+    const res = await fetch('/api/probe-media', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: src }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { probe?: { format?: { duration?: unknown }; streams?: Array<{ codec_type?: unknown; duration?: unknown }> } };
+    const audio = data.probe?.streams?.find((stream) => stream.codec_type === 'audio');
+    const seconds = Number(data.probe?.format?.duration ?? audio?.duration);
+    return Number.isFinite(seconds) && seconds > 0 ? Math.max(1, Math.round(seconds * fps)) : null;
+  } catch {
+    return null;
+  }
+}
+
+type TimelineState = ReturnType<AgentContext['getState']>;
+
+/** Clips on `track` that [start, start + duration) would overlap. */
+function overlapping(state: TimelineState, track: string, start: number, duration: number) {
+  return state.items.filter((item) => item.track === track
+    && item.startFrame < start + duration && start < item.startFrame + item.durationInFrames);
+}
+
 export function execAudioAssetTool(name: string, args: Args, ctx: AgentContext): unknown {
   const choices = availableAudio(ctx);
   if (name === 'list_audio') {
@@ -54,11 +80,42 @@ export function execAudioAssetTool(name: string, args: Args, ctx: AgentContext):
   }
   const track = resolvedTrack ?? defaultTrackId(state, 'audio');
   if (!track) return { error: 'no audio track exists; create one with edit_track action=create json={"trackType":"audio"}' };
-  const placed = ctx.commands.addAudio(commandAudio(asset), {
-    track,
-    startFrame: typeof args.startFrame === 'number' ? args.startFrame : undefined,
-    ripple: args.ripple === true,
-  });
+  const requestedStart = typeof args.startFrame === 'number' && Number.isFinite(args.startFrame)
+    ? Math.max(0, Math.round(args.startFrame))
+    : undefined;
+  return placeAudio(ctx, asset, track, requestedStart, args.ripple === true);
+}
+
+async function placeAudio(
+  ctx: AgentContext,
+  asset: ReturnType<typeof availableAudio>[number],
+  track: string,
+  requestedStart: number | undefined,
+  ripple: boolean,
+): Promise<unknown> {
+  const fps = ctx.getState().fps || 30;
+  // A pool asset added moments ago can still carry a placeholder duration;
+  // use the file's real length so the clip is not cut short.
+  const probed = asset.source === 'project' ? await probedDurationFrames(asset.src, fps) : null;
+  const audio = { ...commandAudio(asset), ...(probed ? { durationInFrames: probed } : {}) };
+  const state = ctx.getState();
+  // Never move a clip away from the frame the caller asked for: say why instead.
+  // Ripple pushes clips that start at or after the frame; one that starts
+  // earlier and runs across it stays put and would still block.
+  if (requestedStart !== undefined) {
+    const blocking = ripple
+      ? overlapping(state, track, requestedStart, 1).filter((item) => item.startFrame < requestedStart)
+      : overlapping(state, track, requestedStart, audio.durationInFrames);
+    if (blocking.length) {
+      return {
+        error: `track ${trackAlias(state, track)} is occupied at frames ${requestedStart}–${requestedStart + audio.durationInFrames} by ${blocking.map((item) => `${item.id} (${item.startFrame}–${item.startFrame + item.durationInFrames})`).join(', ')}`,
+        hint: 'Pass ripple:true to push later clips right, choose another audio track, or pick a free startFrame.',
+      };
+    }
+  }
+  const placed = ctx.commands.addAudio(audio, { track, startFrame: requestedStart, ripple });
+  const item = ctx.getState().items.find((candidate) => candidate.id === placed.itemId);
+  if (!item) return { error: `audio was not added (track ${trackAlias(ctx.getState(), track)} may be locked)` };
   return {
     ok: true,
     added: asset.name,
@@ -68,5 +125,8 @@ export function execAudioAssetTool(name: string, args: Args, ctx: AgentContext):
     source: asset.source,
     trackId: track,
     track: trackAlias(ctx.getState(), track),
+    startFrame: item.startFrame,
+    durationInFrames: item.durationInFrames,
+    ...(probed && probed !== asset.durationInFrames ? { note: `duration taken from the file (${probed} frames), not the pool entry (${asset.durationInFrames})` } : {}),
   };
 }
