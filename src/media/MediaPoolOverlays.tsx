@@ -8,6 +8,7 @@ import { AssetExportButton } from './AssetExportButton';
 import { folderPath } from './mediaPoolFormat';
 import { AssetMenuDestinations } from './AssetMenuDestinations';
 import type { MediaSortKey, MediaTypeFilter } from './mediaPoolFilter';
+import type { useMediaPoolFileImport } from './useMediaPoolFileImport';
 
 interface AssetMenuPortalProps {
   asset?: MediaAsset;
@@ -306,5 +307,25 @@ function RelinkRow({ asset, onRelink }: { asset: MediaAsset; onRelink: (id: stri
       <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{asset.name}</span>
       <button type="button" className="primary" onClick={() => onRelink(asset.id)} style={{ flexShrink: 0 }}>{t('重新链接文件')}</button>
     </div>
+  );
+}
+
+type FileImport = Pick<ReturnType<typeof useMediaPoolFileImport>, 'failedImports' | 'busy' | 'retryFailedImport' | 'dismissFailedImport'>;
+
+/** Files that failed to import stay listed, named, with the reason and a retry. */
+export function MediaFailedImports({ fileImport }: { fileImport: FileImport }) {
+  const t = useT();
+  const { failedImports: entries, busy } = fileImport;
+  const onRetry = (id: string) => { void fileImport.retryFailedImport(id); };
+  const onDismiss = fileImport.dismissFailedImport;
+  if (!entries.length) return null;
+  return (
+    <ul className="cc-media-failed" aria-label={t('导入失败的文件')}>
+      {entries.map((entry) => <li key={entry.id}>
+        <span className="cc-media-failed-message">{entry.message}</span>
+        <button disabled={busy} onClick={() => onRetry(entry.id)}>{t('重试')}</button>
+        <button aria-label={t('忽略')} onClick={() => onDismiss(entry.id)}>×</button>
+      </li>)}
+    </ul>
   );
 }
