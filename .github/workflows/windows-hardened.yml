@@ -28,6 +28,12 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 120
     steps:
+      # Keep LF line endings: the build checks generated shader modules against
+      # their sources byte for byte, and Windows git would convert them to CRLF.
+      - name: Disable CRLF conversion
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
