@@ -14,6 +14,7 @@ import {
 import { handleMcpRequest, mcpTools } from '../external-agent/mcp.ts';
 import { exportJianyingDraft } from '../external-agent/jianying-export.ts';
 import { CONNECT_CLIENTS, connectExternalClient } from '../external-agent/client-connect.ts';
+import { isCapabilityDenied, requireCapability } from '../security/capabilities.ts';
 import { claimBrowserProjectOwnership } from '../external-agent/project-edit-ownership.ts';
 import {
   EDITOR_BOOTSTRAP_HEADER,
@@ -118,6 +119,23 @@ export async function handleExternalAgentBridge(
     const token = externalMcpToken();
     if (typeof client !== 'string' || !CONNECT_CLIENTS.includes(client as (typeof CONNECT_CLIENTS)[number])) {
       sendBridgeJson(res, 400, { ok: false, error: 'invalid-client' });
+      return;
+    }
+    // Writes the MCP token into another application's configuration (and, on
+    // Windows, a persistent user environment variable / on macOS ~/.zshrc).
+    try {
+      await requireCapability({
+        capability: 'SYSTEM_INTEGRATION',
+        action: 'mcp.connect-client',
+        requester: 'editor',
+        summary: `add OpenChatCut to the ${client} configuration (stores the MCP access token there)`,
+        detail: `Client: ${client}\nThe token lets that application control the editor through MCP.`,
+        scopeKey: `mcp.connect-client:${client}`,
+        rememberable: false,
+      });
+    } catch (error) {
+      if (!isCapabilityDenied(error)) throw error;
+      sendBridgeJson(res, 403, { ok: false, error: 'permission-denied' });
       return;
     }
     const result = await connectExternalClient(client, `${requestBaseUrl(req)}/api/external-mcp/mcp`, token);

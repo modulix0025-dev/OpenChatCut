@@ -62,6 +62,29 @@ const keepSqliteVec = TARGET_SQLITE_VEC_PACKAGE[target];
 const sqliteVecFilters = SQLITE_VEC_PACKAGES
   .filter((packageSuffix) => packageSuffix !== keepSqliteVec)
   .map((packageSuffix) => `!node_modules/sqlite-vec-${packageSuffix}/**`);
+// Native packages published per platform. npm installs the build host's
+// variants (and prepare-target adds the target's for cross-builds); anything
+// for another OS is dead weight in the package and is excluded here.
+const targetOs = target.split('-')[0];
+const FOREIGN_OS_NAMES = {
+  win32: ['linux', 'linuxmusl', 'darwin', 'freebsd', 'openbsd', 'netbsd', 'sunos', 'aix', 'android'],
+  darwin: ['linux', 'linuxmusl', 'win32', 'windows', 'freebsd', 'openbsd', 'netbsd', 'sunos', 'aix', 'android'],
+  linux: ['darwin', 'win32', 'windows', 'freebsd', 'openbsd', 'netbsd', 'sunos', 'aix', 'android'],
+}[targetOs] ?? [];
+const PLATFORM_PACKAGE_PREFIXES = [
+  '@img/sharp-', '@img/sharp-libvips-', '@esbuild/', '@rspack/binding-', '@napi-rs/canvas-',
+  '@github/copilot-', '@koromix/koffi-', '@ffprobe-installer/',
+];
+const foreignPlatformFilters = FOREIGN_OS_NAMES.flatMap((os) => [
+  ...PLATFORM_PACKAGE_PREFIXES.map((prefix) => `!node_modules/${prefix}${os}-*/**`),
+  `!node_modules/**/onnxruntime-node/bin/napi-v6/${os}/**`,
+]);
+// esbuild's own package carries the host binary; nothing runs it after build.
+const hostOnlyBinaryFilters = targetOs === process.platform ? [] : ['!node_modules/esbuild/bin/esbuild'];
+const WHISPER_PLATFORMS = ['darwin-arm64', 'darwin-x64', 'win32-x64', 'linux-x64', 'linux-arm64'];
+const foreignWhisperFilters = WHISPER_PLATFORMS
+  .filter((platform) => platform !== target)
+  .map((platform) => `!whisper-cli/${platform}/**`);
 const updateChannel = target.includes('arm64') ? 'latest-arm64' : 'latest-x64';
 const hasMacSigningCertificate = Boolean(process.env.CSC_LINK || process.env.CSC_NAME);
 
@@ -96,6 +119,13 @@ export default {
     ...onnxRuntimeFilters,
     // sqlite-vec (semantic vectors): ship only the target platform's vec0 extension.
     ...sqliteVecFilters,
+    // Other operating systems' native binaries, and source maps from dependencies.
+    ...foreignPlatformFilters,
+    ...hostOnlyBinaryFilters,
+    '!**/*.js.map',
+    '!**/*.mjs.map',
+    '!**/*.cjs.map',
+    '!**/*.d.ts.map',
   ],
   asar: true,
   // Electron fuses are flipped in the packaged binary itself, so they hold even
@@ -132,10 +162,12 @@ export default {
     // Exclude media/uploads because Vite copies all of public/ into dist, which would embed gigabytes of user assets.
     // uploadsMiddleware serves /media/uploads directly from the asset directory (userData in packaged builds),
     // so resources/dist never needs those files.
-    // Source maps are never shipped: they would expose full sources and any
-    // inlined build-time values without helping end users.
-    { from: 'dist', to: 'dist', filter: ['**/*', '!media/uploads/**', '!**/*.map'] },
-    { from: 'desktop-dist/remotion-bundle', to: 'remotion-bundle', filter: ['**/*', '!**/*.map'] },
+    // Editor source maps are not shipped: they only expose sources without
+    // helping end users (nothing secret is inlined at build time).
+    { from: 'dist', to: 'dist', filter: ['**/*', '!media/uploads/**', '!**/*.map', ...foreignWhisperFilters] },
+    // The Remotion render bundle keeps bundle.js.map: @remotion/renderer opens it
+    // at render time (it only holds the app's own render code).
+    { from: 'desktop-dist/remotion-bundle', to: 'remotion-bundle' },
     { from: 'desktop-dist/chrome-headless-shell', to: 'chrome-headless-shell' },
   ],
   npmRebuild: false,

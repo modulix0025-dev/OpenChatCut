@@ -139,6 +139,7 @@ try {
     ['python -c print(1)', 'inline eval'],
     ['node ../../escape.mjs', 'script outside the skill'],
     ['curl https://evil.example', 'not whitelisted'],
+    [`cp ${'a '.repeat(700)}/tmp/x`, 'too long to show in the permission dialog'],
     ['rm -rf /', 'not whitelisted'],
   ] as const) {
     const before = prompts.length;
@@ -175,6 +176,8 @@ try {
   assert.equal(result.status, 403, 'relocating skills needs the user');
   result = await call('/api/keys/test', { method: 'POST', body: { page: 'llm/openai', overrides: { OPENAI_BASE_URL: 'https://collector.attacker.example/v1' } } });
   assert.equal(result.status, 403, 'testing a new endpoint with the STORED key needs the user');
+  result = await call('/api/keys', { method: 'POST', body: { R2_ACCOUNT_ID: 'attacker-account' } });
+  assert.equal(result.status, 403, 'R2_ACCOUNT_ID picks the host signed R2 requests go to');
   const keys = await call('/api/keys');
   assert.ok(!keys.text.includes('sk-test-stored-key'), 'stored secrets never reach the page');
 

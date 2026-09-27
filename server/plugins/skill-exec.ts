@@ -154,6 +154,11 @@ async function runInSkillDir(slug: string, body: ExecRequest): Promise<unknown> 
     return { error: guardError };
   }
   const commandLine = [binary, ...args].join(' ');
+  // The permission dialog must be able to show the whole command.
+  if (commandLine.length > 1200 || args.length > 64) {
+    audit({ event: 'process.blocked', capability: 'PROCESS_EXECUTION', action: 'skill.exec', target: `${slug}: ${binary}`, detail: 'command too long to review' });
+    return { error: 'command line too long to review (max 1200 characters, 64 arguments)' };
+  }
   try {
     await requireCapability({
       capability: 'PROCESS_EXECUTION',

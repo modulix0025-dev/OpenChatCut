@@ -95,7 +95,8 @@ function applySessionPermissions(target: Session, origin: string): void {
     });
   });
   target.setPermissionCheckHandler((_contents, permission, requestingOrigin) => (
-    isTrustedUrl(requestingOrigin, origin) && (SILENT_PERMISSIONS.has(permission) || permission === 'media')
+    // Media is granted only through the request handler's prompt, never by a check.
+    isTrustedUrl(requestingOrigin, origin) && SILENT_PERMISSIONS.has(permission)
   ));
   target.setDevicePermissionHandler(() => false);
   target.on('select-hid-device', (event, _details, callback) => { event.preventDefault(); callback(''); });

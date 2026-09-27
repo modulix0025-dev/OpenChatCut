@@ -52,7 +52,7 @@ const SECRET_PATTERNS: readonly RegExp[] = [
 ];
 
 /** Remove anything credential-shaped and home-directory paths from `text`. */
-export function redactForAudit(text: string): string {
+export function redactForAudit(text: string, scrubPaths = true): string {
   let out = text;
   for (const pattern of SECRET_PATTERNS) {
     out = out.replace(pattern, (match, ...groups: unknown[]) => {
@@ -61,7 +61,7 @@ export function redactForAudit(text: string): string {
       return match.length > 0 ? '[redacted]' : match;
     });
   }
-  out = scrubInternalPaths(out);
+  if (scrubPaths) out = scrubInternalPaths(out);
   return out.length > MAX_FIELD ? `${out.slice(0, MAX_FIELD)}…` : out;
 }
 
@@ -86,7 +86,8 @@ export function audit(record: AuditRecord): void {
   const entry: Record<string, string> = { ts: new Date().toISOString(), event: record.event };
   for (const key of ['capability', 'action', 'requester', 'decision', 'target', 'detail'] as const) {
     const value = record[key];
-    if (typeof value === 'string' && value) entry[key] = redactForAudit(value);
+    // `action` is a code-defined identifier or an HTTP route, never a file path.
+    if (typeof value === 'string' && value) entry[key] = redactForAudit(value, key !== 'action');
   }
   const line = `${JSON.stringify(entry)}\n`;
   if (testSink) {

@@ -28,7 +28,7 @@ export const SAFE_TEMPLATE_GLOBAL_NAMES: readonly string[] = [
  * Property names that escape the template scope: the Function constructor and
  * prototype chain, V8 stack hooks, and DOM links from a template's own element
  * (a ref or event target) up to the document, window or other editor UI.
- * Any key starting with `__` is denied as well. Window-only names such as
+ * Any key starting with `_` is denied as well (React internals). Window-only names such as
  * `top`/`parent`/`self` stay allowed (`style.top` is common): the window itself
  * is unreachable, so they only ever name ordinary data.
  */
@@ -42,10 +42,16 @@ export const DENIED_TEMPLATE_KEYS: ReadonlySet<string> = new Set([
   'execCommand', 'previousSibling', 'nextSibling', 'previousElementSibling',
   'nextElementSibling', 'assignedSlot', 'shadowRoot', 'attachShadow',
   'openChatCutDesktop', 'relatedTarget', 'srcElement',
+  // React fiber / internals reachable from components, refs and events.
+  'stateNode', 'memoizedState', 'memoizedProps', 'pendingProps', 'alternate',
+  'containerInfo', 'updater', 'nativeEvent', 'dispatchConfig',
 ]);
 
 export function isDeniedTemplateKey(key: string): boolean {
-  return key.startsWith('__') || DENIED_TEMPLATE_KEYS.has(key);
+  // Any leading underscore: React keeps its fiber on `_reactInternals` (class
+  // instances) and `__reactFiber$…` / `__reactProps$…` (DOM nodes); walking a
+  // fiber reaches every component's state and callbacks in the editor.
+  return key.startsWith('_') || DENIED_TEMPLATE_KEYS.has(key);
 }
 
 /** Runtime guard for `obj[expr]`: returns the final property key or throws. */

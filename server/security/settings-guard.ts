@@ -11,9 +11,12 @@ import { NON_SECRET_NAMES } from '../keystore-names.ts';
 import { requireCapability } from './capabilities.ts';
 
 const ENDPOINT_KEY = /(BASE_URL|API_BASE|ENDPOINT|PROXY_URL)$/;
+// Settings that are not URLs but choose the host credentials are sent to
+// (R2 requests go to https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com).
+const HOST_DERIVING_KEYS: ReadonlySet<string> = new Set(['R2_ACCOUNT_ID']);
 
 export function isEndpointSetting(name: string): boolean {
-  return ENDPOINT_KEY.test(name);
+  return ENDPOINT_KEY.test(name) || HOST_DERIVING_KEYS.has(name);
 }
 
 /** host[:port] of an endpoint value, lower-cased; the raw text when unparsable. */

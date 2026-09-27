@@ -50,7 +50,7 @@ import {
   toMcpContent,
   toStructuredContent,
 } from './mcp-result.ts';
-import { requireCapability } from '../security/capabilities.ts';
+import { displaySafeText, requireCapability } from '../security/capabilities.ts';
 import { audit } from '../security/audit-log.ts';
 export { toMcpContent, toStructuredContent } from './mcp-result.ts';
 
@@ -135,16 +135,17 @@ async function callTool(
   // session does afterwards. A token holder may ask for it, but only the user
   // can grant it (native prompt; remembered per client if they choose).
   if (name === 'begin_edit_session' && args.approvalMode === 'auto') {
-    const client = typeof args.clientName === 'string' && args.clientName.trim()
-      ? args.clientName.trim().split('').filter((ch) => ch.charCodeAt(0) >= 0x20).join('').slice(0, 60)
-      : 'unnamed MCP client';
+    // The client name is self-asserted and every client shares one token, so
+    // the grant is scoped to the token (not the name) and never persisted.
+    const client = displaySafeText(typeof args.clientName === 'string' ? args.clientName : '', 60) || 'unnamed MCP client';
     await requireCapability({
       capability: 'MCP_TOOLS',
       action: 'mcp.auto-approve',
       requester: 'external-mcp',
-      summary: `let the external agent "${client}" edit without asking before each action`,
-      detail: `Client: ${client}\nThe agent could then import media, export, and run paid generation tools in this session without further confirmation.`,
-      scopeKey: `mcp.auto:${client}`,
+      summary: 'let an external agent edit without asking before each action',
+      detail: `Client (self-reported name): ${client}\nAny program holding the OpenChatCut MCP token could then import media, export, and run paid generation tools until OpenChatCut restarts.`,
+      scopeKey: 'mcp.auto',
+      maxRemember: 'session',
     });
   }
   const allowRevisionDrift = name === 'get_edit_session'

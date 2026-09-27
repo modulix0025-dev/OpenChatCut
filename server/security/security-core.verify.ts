@@ -14,6 +14,7 @@ import {
 import {
   CapabilityDeniedError,
   developmentCapabilityPrompter,
+  displaySafeText,
   listPersistedCapabilityGrants,
   registerCapabilityPrompter,
   requireCapability,
@@ -24,6 +25,7 @@ import {
   type CapabilityRequest,
 } from './capabilities.ts';
 import { audit, redactForAudit, setAuditSinkForTests } from './audit-log.ts';
+import { capabilityDialogChoices, capabilityDialogDetail, capabilityDialogOptions } from '../../desktop/capability-dialog.ts';
 
 // ── local path safety ────────────────────────────────────────────────────────
 const rejected: Array<[string, NodeJS.Platform, string]> = [
@@ -186,6 +188,33 @@ process.env.OPENCHATCUT_CAPABILITY_POLICY = 'deny';
 registerCapabilityPrompter(developmentCapabilityPrompter(() => undefined));
 await assert.rejects(requireCapability(request({ scopeKey: 'dev-deny' })), CapabilityDeniedError);
 delete process.env.OPENCHATCUT_CAPABILITY_POLICY;
+
+// ── what the dialog shows ────────────────────────────────────────────────────
+// Bidi overrides and controls cannot disguise a name ("gpj.exe" shown as "exe.jpg").
+assert.equal(displaySafeText('evil\u202Egpj.exe\u0007'), 'evilgpj.exe');
+assert.equal(displaySafeText('a\u2066b\u2069c\u200Fd'), 'abcd');
+const baseRequest = request({ scopeKey: 'dialog' });
+assert.deepEqual(capabilityDialogChoices(baseRequest).map((choice) => choice.decision),
+  ['deny', 'allow-once', 'allow-session', 'allow-always']);
+assert.equal(capabilityDialogOptions(baseRequest).defaultId, 0, 'Deny is the default button');
+assert.equal(capabilityDialogOptions(baseRequest).cancelId, 0, 'Esc / close means Deny');
+assert.deepEqual(capabilityDialogChoices(request({ projectId: 'p' })).map((choice) => choice.decision),
+  ['deny', 'allow-once', 'allow-session', 'allow-project', 'allow-always']);
+assert.deepEqual(capabilityDialogChoices(request({ rememberable: false })).map((choice) => choice.decision), ['deny', 'allow-once']);
+assert.deepEqual(capabilityDialogChoices(request({ maxRemember: 'session' })).map((choice) => choice.decision), ['deny', 'allow-once', 'allow-session']);
+// A detail too long to show in full keeps head and tail and offers no "remember".
+const long = `Command: cp ${'benign '.repeat(400)}HIDDEN_TAIL_ARG`;
+const shown = capabilityDialogDetail(long);
+assert.ok(shown.elided && shown.text.includes('HIDDEN_TAIL_ARG') && shown.text.includes('characters not shown'));
+assert.deepEqual(capabilityDialogChoices(request({ detail: long })).map((choice) => choice.decision), ['deny', 'allow-once']);
+// Session-capped grants are never persisted, whatever the prompter answers.
+resetCapabilityStateForTests();
+registerCapabilityPrompter(async () => 'allow-always');
+await requireCapability(request({ scopeKey: 'session-capped', maxRemember: 'session' }));
+assert.ok(!listPersistedCapabilityGrants().some((grant) => grant.scopeKey === 'session-capped'));
+resetCapabilityStateForTests();
+await assert.rejects(requireCapability(request({ scopeKey: 'session-capped', maxRemember: 'session' })), CapabilityDeniedError,
+  'a session-capped grant does not survive a restart');
 
 // ── executable allowlisting in packaged builds ───────────────────────────────
 process.env.FFMPEG_PATH = '/planted/ffmpeg';

@@ -1,4 +1,4 @@
-import type { BrowserWindow } from 'electron';
+import { app, type BrowserWindow } from 'electron';
 import { externalMcpToken } from '../server/editor-auth.ts';
 import { runDesktopMcpRecoverySmoke } from './smoke-mcp-recovery.ts';
 import { runDesktopRendererRecoverySmoke } from './smoke-renderer-recovery.ts';
@@ -41,6 +41,7 @@ export async function runDesktopSmokeProbe(
     throw new Error(`/api/external-mcp/mcp → HTTP ${mcp.status}`);
   }
   console.log('[smoke] external MCP endpoint ok');
+  await runDesktopSecuritySmoke(origin, win, cookieHeader);
   if (process.env.CC_SMOKE_MCP_RECOVERY === '1') {
     await runDesktopMcpRecoverySmoke(origin, externalMcpToken());
   }
@@ -121,4 +122,35 @@ export async function runDesktopSmokeProbe(
   if (process.env.CC_SMOKE_RENDERER_RECOVERY === '1') {
     await runDesktopRendererRecoverySmoke(win);
   }
+}
+
+/**
+ * The hardening must hold in the packaged app, not just in unit tests:
+ * front-door gate, no Node in the page, CSP blocking injected script, no
+ * popups. Runs in every packaged smoke (CI Windows/macOS/Linux).
+ */
+async function runDesktopSecuritySmoke(origin: string, win: BrowserWindow, cookieHeader: string): Promise<void> {
+  if (cookieHeader) {
+    const anonymous = await fetch(`${origin}/api/keys`);
+    if (anonymous.status !== 403) throw new Error(`embedded server answered a request without the session cookie (HTTP ${anonymous.status})`);
+  }
+  const page = await win.webContents.executeJavaScript(`(() => {
+    const script = document.createElement('script');
+    script.textContent = 'window.__occCspProbe = 1';
+    document.head.appendChild(script);
+    script.remove();
+    let popup = null;
+    try { popup = window.open('about:blank', '_blank'); } catch {}
+    return {
+      node: typeof require !== 'undefined' || typeof process !== 'undefined' || typeof module !== 'undefined',
+      inlineScriptRan: window.__occCspProbe === 1,
+      popup: Boolean(popup),
+      bridgeKeys: Object.keys(window.openChatCutDesktop ?? {}).length,
+    };
+  })()`) as { node: boolean; inlineScriptRan: boolean; popup: boolean; bridgeKeys: number };
+  if (page.node) throw new Error('Node.js globals are reachable from the editor page');
+  if (app.isPackaged && page.inlineScriptRan) throw new Error('Content-Security-Policy did not block an injected inline script');
+  if (page.popup) throw new Error('window.open created a popup');
+  if (!page.bridgeKeys) throw new Error('desktop bridge missing');
+  console.log('[smoke] security boundaries ok (session gate, no Node, CSP, no popups)');
 }

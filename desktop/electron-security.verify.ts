@@ -104,11 +104,12 @@ assert.equal(config.win.requestedExecutionLevel, 'asInvoker', 'the app never req
 assert.equal(config.nsis.perMachine, false, 'default install is per-user (no UAC)');
 assert.equal(config.nsis.deleteAppDataOnUninstall, false, 'uninstall never deletes user projects by default');
 for (const resource of config.extraResources as Array<{ from: string; filter?: string[] }>) {
-  if (resource.from === 'dist' || resource.from === 'desktop-dist/remotion-bundle') {
+  if (resource.from === 'dist') {
     assert.ok(resource.filter?.includes('!**/*.map'), `${resource.from} must not ship source maps`);
   }
 }
-assert.ok(!(config.files as string[]).some((entry) => entry.endsWith('.map')), 'main bundles ship without maps');
+assert.ok(!(config.files as string[]).some((entry) => !entry.startsWith('!') && entry.endsWith('.map')), 'main bundles ship without maps');
+assert.ok((config.files as string[]).includes('!**/*.js.map'), 'dependency source maps are excluded');
 const pkg = JSON.parse(await read('../package.json')) as { openchatcut?: { directUpdates?: boolean } };
 assert.equal(pkg.openchatcut?.directUpdates, false, 'unsigned builds must not self-update in place');
 

@@ -107,6 +107,10 @@ const WIN32_X64_PLATFORM_PACKAGES = [
   '@koromix/koffi-win32-x64',
   '@napi-rs/canvas-win32-x64-msvc',
   '@github/copilot-win32-x64',
+  // Loaded at startup through @remotion/bundler → @rspack/core, even though the
+  // packaged app renders from the prebuilt bundle.
+  '@rspack/binding-win32-x64-msvc',
+  '@esbuild/win32-x64',
 ];
 
 interface LockEntry { version?: string; integrity?: string; resolved?: string }

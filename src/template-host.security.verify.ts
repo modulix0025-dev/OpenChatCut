@@ -46,6 +46,14 @@ const escapes: Record<string, string> = {
   'window.top': wrap('window.top'),
   'setTimeout': wrap('setTimeout(() => {}, 1)'),
   'import.meta': wrap('import.meta.url'),
+  // Independent review finding: a class component's instance carries its React
+  // fiber (`_reactInternals`), from which the whole editor tree is reachable.
+  'class component fiber walk': `const T = ({ item }) => React.createElement(class extends React.Component {
+    render() { let n = this._reactInternals; while (n && n.return) n = n.return; return null; }
+  });`,
+  'computed fiber key': wrap(`const k = '_react' + 'Internals'; const f = item.props.el[k]`),
+  'fiber field on a plain object': wrap('item.props.el.stateNode'),
+  'memoizedState': wrap('item.props.el.memoizedState'),
 };
 
 // A payload counts as blocked when compilation rejects it, or when rendering
@@ -102,6 +110,30 @@ assert.equal(span.srcDoc, undefined);
 assert.equal(span.formAction, undefined);
 assert.equal((kids[1].props as Record<string, unknown>).dangerouslySetInnerHTML, undefined,
   'markup with event handlers must be dropped');
+
+// Class components are not template API: React.Component is hidden and a
+// class passed as an element type renders nothing (no instance, no fiber).
+const classType = await prepareTemplate(`const C = ({ item }) => {
+  function Plain() { return null; }
+  return <div><Plain /></div>;
+};`);
+assert.ok(classType, 'plain function components still work');
+const refs = await prepareTemplate(`const R = ({ item }) => {
+  const canvasRef = React.useRef(null);
+  const divRef = React.useRef(null);
+  return <div><canvas ref={canvasRef} /><div ref={divRef} /></div>;
+};`);
+void refs;
+{
+  const { createElementSafeForTests } = await import('./template-host');
+  class Hostile extends React.Component { render() { return null; } }
+  assert.equal(createElementSafeForTests(Hostile as never, null), null, 'class components render nothing');
+  assert.equal(createElementSafeForTests(React.memo(() => null) as never, null), null, 'exotic element objects render nothing');
+  const canvas = createElementSafeForTests('canvas', { ref: () => undefined }) as unknown as React.ReactElement<Record<string, unknown>>;
+  assert.ok(canvas.props.ref !== undefined || (canvas as unknown as { ref?: unknown }).ref !== undefined, '<canvas> keeps its ref for 2D drawing');
+  const div = createElementSafeForTests('div', { ref: () => undefined }) as unknown as React.ReactElement<Record<string, unknown>>;
+  assert.equal(div.props.ref, undefined, 'other host elements never receive a live DOM ref');
+}
 
 // The regex layer still catches the classic forms.
 assert.throws(() => validateTemplate('const T = () => fetch("/x")'));

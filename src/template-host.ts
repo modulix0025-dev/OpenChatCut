@@ -92,6 +92,16 @@ export function isInertTemplateMarkup(html: unknown): boolean {
 }
 
 const createElementSafe = ((type: unknown, props: unknown, ...children: unknown[]) => {
+  // Components must be plain functions: a class (anything with a prototype
+  // render method) would receive a fiber-bearing instance.
+  if (typeof type === 'function' && (type as { prototype?: { render?: unknown } }).prototype?.render) return null;
+  if (type !== null && typeof type === 'object') return null; // lazy/memo/portal objects are not template API
+  // A ref hands the live DOM node to template code; only <canvas> (2D drawing)
+  // legitimately needs one.
+  if (typeof type === 'string' && type.toLowerCase() !== 'canvas' && props && typeof props === 'object' && 'ref' in props) {
+    const { ref: _ref, ...rest } = props as Record<string, unknown>;
+    props = rest;
+  }
   // Rendered as nothing (not thrown) so one hostile node cannot blank the preview.
   if (typeof type === 'string' && BLOCKED_TEMPLATE_ELEMENTS.has(type.toLowerCase())) return null;
   if (typeof type === 'string' && props && typeof props === 'object') {
@@ -121,11 +131,17 @@ const createElementSafe = ((type: unknown, props: unknown, ...children: unknown[
 
 // Exactly the same as real React, only createElement plus the above host-property→style return.
 // Use Proxy to forward all other members (Fragment/hooks/…), not affected by enumerability.
+const BLOCKED_REACT_MEMBERS: ReadonlySet<string> = new Set([
+  'Component', 'PureComponent', 'createFactory', 'cloneElement', 'createRef', 'forwardRef',
+  'useImperativeHandle', 'act', 'captureOwnerStack',
+]);
+
 const HostReact = new Proxy(React, {
   get: (target, prop, recv) => {
     if (prop === 'createElement') return createElementSafe;
-    // React's internals object and legacy hooks are not part of the template API.
-    if (typeof prop === 'string' && (prop.startsWith('__') || prop === 'createFactory')) return undefined;
+    // React's internals and class components are not part of the template API:
+    // a class instance carries its fiber, which leads to the whole editor tree.
+    if (typeof prop === 'string' && (prop.startsWith('_') || BLOCKED_REACT_MEMBERS.has(prop))) return undefined;
     return Reflect.get(target, prop, recv);
   },
 });
@@ -249,3 +265,6 @@ export function getCompiledTemplate(code: string): MgComponent {
   if (!compiled) throw new Error('template: 尚未完成编译');
   return compiled;
 }
+
+/** Tests only: the element filter applied to every createElement in templates. */
+export const createElementSafeForTests = createElementSafe;

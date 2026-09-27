@@ -50,6 +50,24 @@ export interface CapabilityRequest {
   readonly projectId?: string;
   /** False for actions that must be confirmed every time (no remember options). */
   readonly rememberable?: boolean;
+  /** 'session': the grant may be remembered until restart, never persisted. */
+  readonly maxRemember?: 'session';
+}
+
+/**
+ * Text safe to show in a permission dialog: no control characters and no
+ * bidirectional overrides (which could make "exe.txt" read as "txt.exe").
+ */
+export function displaySafeText(value: string, maxLength = 200): string {
+  let out = '';
+  for (const ch of value) {
+    const code = ch.codePointAt(0)!;
+    if (code < 0x20 || code === 0x7f) continue;
+    if ((code >= 0x200e && code <= 0x200f) || (code >= 0x202a && code <= 0x202e) || (code >= 0x2066 && code <= 0x2069)) continue;
+    out += ch;
+  }
+  out = out.trim();
+  return out.length > maxLength ? `${out.slice(0, maxLength)}…` : out;
 }
 
 export type CapabilityDecision = 'deny' | 'allow-once' | 'allow-session' | 'allow-project' | 'allow-always';
@@ -185,7 +203,9 @@ export async function requireCapability(request: CapabilityRequest): Promise<voi
     () => (hasGrant(request) ? 'allow-once' as const : ask(request)),
   )) as CapabilityDecision;
   const rememberable = request.rememberable !== false;
-  switch (decision) {
+  const effective: CapabilityDecision = request.maxRemember === 'session'
+    && (decision === 'allow-project' || decision === 'allow-always') ? 'allow-session' : decision;
+  switch (effective) {
     case 'allow-once':
       break;
     case 'allow-session':
@@ -215,7 +235,7 @@ export async function requireCapability(request: CapabilityRequest): Promise<voi
       record(request, 'deny');
       throw new CapabilityDeniedError(request);
   }
-  record(request, decision);
+  record(request, effective);
 }
 
 /** Forget every persisted and session grant (Settings → reset permissions). */
