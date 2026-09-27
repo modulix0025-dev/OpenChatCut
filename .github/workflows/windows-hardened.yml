@@ -14,6 +14,7 @@ on:
       - claude/eager-albattani-2tprvr
     paths:
       - '.github/workflows/windows-hardened.yml'
+      - 'scripts/sync-shader-sources.mjs'
 
 permissions:
   contents: read

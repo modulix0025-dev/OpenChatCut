@@ -13,7 +13,7 @@
 // Usage: node scripts/sync-shader-sources.mjs [--check]
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -37,7 +37,9 @@ function twinPath(shaderPath) {
 
 function twinContent(shaderPath, text) {
   return [
-    `// GENERATED from ${relative(root, shaderPath)} by scripts/sync-shader-sources.mjs — do not edit.`,
+    // POSIX separators on every host: Windows' relative() yields backslashes,
+    // which made every committed twin read as stale in Windows builds.
+    `// GENERATED from ${relative(root, shaderPath).split(sep).join('/')} by scripts/sync-shader-sources.mjs — do not edit.`,
     `export default ${JSON.stringify(text)};`,
     '',
   ].join('\n');
