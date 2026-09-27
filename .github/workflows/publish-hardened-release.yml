@@ -1,0 +1,78 @@
+# Publishes the executables from a successful "Windows hardened build" run as a
+# GitHub pre-release. Release assets are served from GitHub's CDN: fast,
+# resumable, and downloadable without signing in, unlike Actions artifacts.
+# The files are copied byte for byte from that run's artifact; nothing is
+# rebuilt.
+name: Publish hardened release
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Run ID of a successful "Windows hardened build" run'
+        required: true
+  push:
+    branches:
+      - claude/eager-albattani-2tprvr
+    paths:
+      - '.github/workflows/publish-hardened-release.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish executables as a release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # Default: the verified run 36310597591 (commit 2de9bdc).
+      SOURCE_RUN: ${{ inputs.run_id || '36310597591' }}
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: OpenChatCut-windows-x64-hardened
+          path: files
+          run-id: ${{ env.SOURCE_RUN }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+
+      - name: Verify checksums
+        working-directory: files
+        run: |
+          set -euo pipefail
+          ls -la
+          sha256sum -c SHA256SUMS.txt
+
+      - name: Create release
+        run: |
+          set -euo pipefail
+          tag="hardened-0.2.14-run${SOURCE_RUN}"
+          sha=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN}" --jq .head_sha)
+          {
+            echo "Security-hardened Windows x64 build of OpenChatCut 0.2.14 (unsigned)."
+            echo
+            echo "Built and smoke-tested on a real Windows runner in run https://github.com/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN} (commit ${sha})."
+            echo
+            echo "- OpenChatCut-0.2.14-x64.exe: installer (choose \"Only for me\" to install without admin rights)"
+            echo "- OpenChatCut-Portable-0.2.14-x64.exe: portable, no installation"
+            echo
+            echo "Unsigned: Windows SmartScreen will warn; choose More info, then Run anyway."
+            echo
+            echo "SHA-256:"
+            echo '```'
+            cat files/SHA256SUMS.txt
+            echo '```'
+          } > notes.md
+          gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$sha" \
+            --prerelease \
+            --title "OpenChatCut 0.2.14 hardened (Windows x64)" \
+            --notes-file notes.md \
+            files/*.exe files/SHA256SUMS.txt
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url,assets --jq '.url, (.assets[] | .url)'
