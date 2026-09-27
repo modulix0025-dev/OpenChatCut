@@ -15,7 +15,7 @@ import {
   h264HardwareSupportsDimensions,
   SOFTWARE_H264_PROFILE,
 } from './performance.mjs';
-import { renderDirectHardware } from './direct-hardware.mjs';
+import { ffmpegHasFdkAac, renderDirectHardware, renderWithAacRemux } from './direct-hardware.mjs';
 import { assertMaterializedRenderSnapshot, normalizeH264Profile } from './render-contract.mjs';
 import { resolveRenderTimeout } from './render-timeout.mjs';
 import { getServeUrl } from './serve-bundle.mjs';
@@ -101,13 +101,34 @@ export async function withAbortableCompositionSelection({
   }
 }
 
-function directHardwareRenderer(directBinaries, abortSignal) {
-  if (!directBinaries) return renderMedia;
+/**
+ * Remotion encodes `audioCodec: 'aac'` with libfdk_aac. When the mirrored
+ * ffmpeg lacks it (Windows ships ffmpeg-static for hardware encoders), H.264
+ * renders take MP3 audio and remux it to AAC; ProRes takes PCM, which .mov
+ * carries losslessly.
+ */
+export function aacFallbackFor(codec, hasFdkAac) {
+  if (hasFdkAac) return 'none';
+  if (codec === 'h264') return 'remux';
+  if (codec === 'prores') return 'pcm';
+  return 'none';
+}
+
+function directHardwareRenderer(directBinaries, abortSignal, aacFallback = 'none') {
+  const softwareRender = (attempt) => {
+    if (attempt.audioCodec || attempt.muted) return renderMedia(attempt);
+    if (aacFallback === 'remux') {
+      return renderWithAacRemux({ render: renderMedia, options: attempt, binariesDirectory: attempt.binariesDirectory, signal: abortSignal });
+    }
+    if (aacFallback === 'pcm') return renderMedia({ ...attempt, audioCodec: 'pcm-16' });
+    return renderMedia(attempt);
+  };
+  if (!directBinaries) return softwareRender;
   // The custom ffmpeg override marks the hardware attempt; the software retry drops it
   // but keeps binariesDirectory, which every attempt needs once the app ships as an asar.
   return (attempt) => attempt.ffmpegOverride
     ? renderDirectHardware({ render: renderMedia, options: attempt, binariesDirectory: directBinaries, signal: abortSignal })
-    : renderMedia(attempt);
+    : softwareRender(attempt);
 }
 
 /** Render with the selected probed engine, then make a truthful software retry. */
@@ -159,7 +180,8 @@ async function renderMediaOptimized(options) {
     binariesDirectory: binariesDirectory(),
     ...(automaticBitrate ? { videoBitrate: automaticBitrate } : {}),
   };
-  const render = directHardwareRenderer(directBinaries, abortSignal);
+  const aacFallback = aacFallbackFor(renderOptions.codec, await ffmpegHasFdkAac(binariesDirectory()));
+  const render = directHardwareRenderer(directBinaries, abortSignal, aacFallback);
   if (!profile) return { result: await render(hardwareOptions), encoder: undefined };
   if (oversizeFallbackReason) {
     return {
