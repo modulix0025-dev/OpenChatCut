@@ -643,4 +643,9 @@ export default {
   '未设置': 'Not set',
   '存放 API 格式工作流及其 manifest 的文件夹。': 'Folder with the API-format workflows and their manifests.',
   '用你自己的 ComfyUI 工作流生成（本机 http://127.0.0.1:8188，或租用 GPU 服务器的隧道地址）。工作流文件夹里每个工作流是一对文件：<名称>.json（在 ComfyUI 里“导出 (API 格式)”）和 <名称>.manifest.json（说明提示词、种子、尺寸、参考图写入哪个节点，以及输出节点）。详见 README_MODULEX.md。': 'Generate with your own ComfyUI workflows (local http://127.0.0.1:8188, or the tunnel address of a rented GPU server). Each workflow in the folder is a pair of files: <name>.json (exported with “Save (API Format)” in ComfyUI) and <name>.manifest.json (which node receives the prompt, seed, size and reference image, and which node is the output). See README_MODULEX.md.',
+  '新建工程、历史版本和应用生成的素材保存在这里。桌面端导入的文件默认复制到工程素材库，移动或删除原文件不会影响工程；也可改为只建立引用。浏览器运行时会上传托管副本。修改存储目录后重启应用生效。': 'New projects, version history and generated media are saved here. Files imported on the desktop are copied into the project library by default, so moving or deleting the original does not affect the project; you can switch to linking instead. The browser build uploads a managed copy. A storage folder change takes effect after a restart.',
+  '导入文件': 'Imported files',
+  '复制会占用额外磁盘空间，但工程不再依赖原文件的位置；引用适合很大的原始素材。引用的文件被移动后，素材库会标记为离线，可用“重新链接”找回。': 'Copying uses extra disk space but the project no longer depends on where the original is; linking suits very large masters. When a linked file moves, the media pool marks it offline and “Relink” finds it again.',
+  '复制到工程素材库（默认）': 'Copy into the project library (default)',
+  '只引用原位置': 'Link to the original location',
 } as Record<string, string>;

@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { stat } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import { copyFile, mkdir, rename, rm, stat } from 'node:fs/promises';
+import { getKey } from './keystore.ts';
 import { basename, extname, join } from 'node:path';
 import { ffmpegBin, ffprobeBin } from './media-binaries.ts';
 import { ffmpegThreadArgs, spawnMediaProcess } from './media-process.ts';
@@ -24,16 +26,42 @@ export interface LocalMediaImport {
  * import pipeline (hash + normalize + ASR) already saturates disk I/O. */
 const LARGE_HASH_SKIP_BYTES = 1.5 * 1024 * 1024 * 1024;
 
+export type LocalMediaImportMode = 'copy' | 'link';
+
 export interface LocalMediaImportDependencies {
   stat(path: string): Promise<{ isFile(): boolean; size: number; mtimeMs: number }>;
   hashFile(path: string): Promise<string>;
   registerReference(directory: string, name: string, sourcePath: string): Promise<void>;
+  /** Copy the file into the project library as `name` (atomic). */
+  copyIntoLibrary?(directory: string, name: string, sourcePath: string): Promise<void>;
+  /** 'copy' (default) keeps a library copy; 'link' references the file where it is. */
+  importMode?(): LocalMediaImportMode;
+}
+
+/** MEDIA_IMPORT_MODE setting: 'link' keeps files in place; anything else copies. */
+export function localMediaImportMode(): LocalMediaImportMode {
+  return getKey('MEDIA_IMPORT_MODE').trim() === 'link' ? 'link' : 'copy';
+}
+
+async function copyIntoLibrary(directory: string, name: string, sourcePath: string): Promise<void> {
+  await mkdir(directory, { recursive: true });
+  const partial = join(directory, `.${name}.part`);
+  try {
+    // Copy-on-write clone where the filesystem supports it (APFS, ReFS, Btrfs).
+    await copyFile(sourcePath, partial, fsConstants.COPYFILE_FICLONE);
+    await rename(partial, join(directory, name));
+  } catch (error) {
+    await rm(partial, { force: true }).catch(() => undefined);
+    throw error;
+  }
 }
 
 const DEFAULT_LOCAL_MEDIA_IMPORT_DEPENDENCIES: LocalMediaImportDependencies = {
   stat: (path) => stat(path),
   hashFile: sha256File,
   registerReference: registerMediaReference,
+  copyIntoLibrary,
+  importMode: localMediaImportMode,
 };
 
 type ProbeStream = {
@@ -130,7 +158,13 @@ export async function importLocalMedia(
   if (!finalInfo.isFile() || finalInfo.size !== sourceInfo.size || finalInfo.mtimeMs !== sourceInfo.mtimeMs) {
     throw new Error('local media source changed during import');
   }
-  await dependencies.registerReference(directory, storedName, sourcePath);
+  // Copy by default so moving or deleting the original never breaks the clip;
+  // 'link' keeps the old behavior for large masters that should stay in place.
+  if ((dependencies.importMode?.() ?? 'link') === 'copy' && dependencies.copyIntoLibrary) {
+    await dependencies.copyIntoLibrary(directory, storedName, sourcePath);
+  } else {
+    await dependencies.registerReference(directory, storedName, sourcePath);
+  }
   return { src: `/media/uploads/${storedName}`, storedName, contentHash };
 }
 

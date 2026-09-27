@@ -246,11 +246,15 @@ export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
       { key: 'storage', title: '默认工程位置', hint: '新工程和生成素材的默认保存位置，以及可选的 R2 云备份。',
         vendors: [
           { key: 'storage/projects', vendor: 'localdisk', title: '默认工程位置',
-            note: '新建工程、历史版本和应用生成的素材保存在这里。桌面端从外部拖入的文件和文件夹保留在原位置，'
-              + '工程只建立引用；浏览器运行时会上传托管副本。修改后重启应用生效。',
+            note: '新建工程、历史版本和应用生成的素材保存在这里。桌面端导入的文件默认复制到工程素材库，移动或删除原文件不会影响工程；也可改为只建立引用。浏览器运行时会上传托管副本。修改存储目录后重启应用生效。',
             fields: [
               directory('OPENCHATCUT_DATA_DIR', '默认工程位置', '应用默认数据目录',
                 '桌面端点击“选择目录”；也可手动输入绝对路径（可用 ~/ 开头）。清除后回到默认目录。'),
+              {
+                name: 'MEDIA_IMPORT_MODE', label: '导入文件', kind: 'select',
+                note: '复制会占用额外磁盘空间，但工程不再依赖原文件的位置；引用适合很大的原始素材。引用的文件被移动后，素材库会标记为离线，可用“重新链接”找回。',
+                options: [{ value: '', label: '复制到工程素材库（默认）' }, { value: 'link', label: '只引用原位置' }],
+              },
             ] },
           { key: 'storage/r2', vendor: 'r2', title: 'Cloudflare R2',
             note: '未配置时素材只存本机。配置后：每次上传同步写入 R2（桶保持私有，'

@@ -479,6 +479,11 @@ const overrides: Record<string, string> = {
   '未设置': 'Non impostato',
   '存放 API 格式工作流及其 manifest 的文件夹。': 'Cartella con i workflow in formato API e i relativi manifest.',
   '用你自己的 ComfyUI 工作流生成（本机 http://127.0.0.1:8188，或租用 GPU 服务器的隧道地址）。工作流文件夹里每个工作流是一对文件：<名称>.json（在 ComfyUI 里“导出 (API 格式)”）和 <名称>.manifest.json（说明提示词、种子、尺寸、参考图写入哪个节点，以及输出节点）。详见 README_MODULEX.md。': 'Genera con i tuoi workflow ComfyUI (in locale http://127.0.0.1:8188 o l’indirizzo del tunnel di un server GPU a noleggio). Ogni workflow nella cartella è una coppia di file: <nome>.json (esportato con “Save (API Format)” in ComfyUI) e <nome>.manifest.json (quale nodo riceve prompt, seed, dimensioni e immagine di riferimento, e quale nodo è l’output). Vedi README_MODULEX.md.',
+  '新建工程、历史版本和应用生成的素材保存在这里。桌面端导入的文件默认复制到工程素材库，移动或删除原文件不会影响工程；也可改为只建立引用。浏览器运行时会上传托管副本。修改存储目录后重启应用生效。': 'Qui vengono salvati nuovi progetti, cronologia delle versioni e media generati. I file importati sul desktop vengono copiati per impostazione predefinita nella libreria del progetto, quindi spostare o eliminare l’originale non influisce sul progetto; puoi scegliere invece il collegamento. Nel browser viene caricata una copia gestita. Il cambio di cartella ha effetto dopo il riavvio.',
+  '导入文件': 'File importati',
+  '复制会占用额外磁盘空间，但工程不再依赖原文件的位置；引用适合很大的原始素材。引用的文件被移动后，素材库会标记为离线，可用“重新链接”找回。': 'La copia occupa spazio su disco in più, ma il progetto non dipende più dalla posizione dell’originale; il collegamento è adatto a master molto grandi. Se un file collegato viene spostato, la libreria lo segna offline e “Ricollega” lo ritrova.',
+  '复制到工程素材库（默认）': 'Copia nella libreria del progetto (predefinito)',
+  '只引用原位置': 'Collega alla posizione originale',
 };
 
 export default overrides;

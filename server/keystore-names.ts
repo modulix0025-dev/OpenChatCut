@@ -83,6 +83,7 @@ export const KEY_NAMES = [
   "COMFYUI_BASE_URL",
   "COMFYUI_API_KEY",
   "COMFYUI_WORKFLOW_DIR",
+  "MEDIA_IMPORT_MODE",
   "WAVESPEED_API_KEY",
   "WAVESPEED_BASE_URL",
   "BYTEPLUS_API_KEY",
@@ -193,6 +194,7 @@ export type KeyName = (typeof KEY_NAMES)[number];
 // not credentials). Deliberately a separate explicit list rather than derived from
 // KEY_NAMES: adding a key to the whitelist must never accidentally make it non-secret.
 export const NON_SECRET_NAMES: ReadonlySet<string> = new Set([
+  "MEDIA_IMPORT_MODE",
   "COMFYUI_BASE_URL",
   "COMFYUI_WORKFLOW_DIR",
   "AGENT_IMPORT_ROOTS",

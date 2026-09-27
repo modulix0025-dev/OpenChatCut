@@ -67,9 +67,22 @@ const overTenGigabytes = (10 * 1024 ** 3) + 1;
 
 try {
   process.env.MEDIA_DIR = uploadDirectory;
-  seedKeystore({ MEDIA_DIR: uploadDirectory });
   await mkdir(uploadDirectory, { recursive: true });
   await writeFile(sourcePath, originalContents);
+
+  // Default: the file is copied into the project library, so moving or
+  // deleting the original never takes the clip offline.
+  seedKeystore({ MEDIA_DIR: uploadDirectory });
+  const copied = await importLocalMedia(sourcePath, 'camera-copy.mov');
+  const copiedPath = join(uploadDirectory, copied.storedName);
+  assert.deepEqual(await readFile(copiedPath), originalContents, 'default import keeps a library copy');
+  assert.equal(copied.contentHash, expectedContentHash);
+  await assert.rejects(stat(mediaReferenceManifestPath(uploadDirectory, copied.storedName)), { code: 'ENOENT' },
+    'a copied import writes no reference manifest');
+  await rm(copiedPath);
+
+  // MEDIA_IMPORT_MODE=link: reference the file where it is.
+  seedKeystore({ MEDIA_DIR: uploadDirectory, MEDIA_IMPORT_MODE: 'link' });
 
   const imported = await importLocalMedia(sourcePath, 'camera-original.mov');
   const importedPath = join(uploadDirectory, imported.storedName);
