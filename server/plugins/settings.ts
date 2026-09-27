@@ -22,10 +22,17 @@ import {
   checkDataDir,
   expandDataDir,
   readDataDirPointer,
-  relocateDataDir,
   relocatedMediaDestination,
   writeDataDirPointer,
 } from '../data-dir.ts';
+import {
+  clearPendingRelocation,
+  isCloudSyncedPath,
+  projectDataIn,
+  readPendingRelocation,
+  readRelocationReport,
+  writePendingRelocation,
+} from '../data-dir-relocation.ts';
 import { sqliteStoreEnabled } from '../storage/sqlite-store.ts';
 
 const ISOLATED_R2_SETTINGS = [
@@ -87,7 +94,12 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 function settingsBody(restartRequired = false) {
   const profile = runtimeProfile();
   const status = keyStatus();
-  const configured = readDataDirPointer() ?? '';
+  // A move saved but not yet applied shows its target, with the restart notice.
+  const pending = readPendingRelocation();
+  const configured = (pending ? pending.targetPointer : readDataDirPointer()) ?? '';
+  // The outcome of the last startup move, shown on the storage page for a week.
+  const report = readRelocationReport();
+  const relocation = report && Date.now() - Date.parse(report.at) < 7 * 86_400_000 ? report : null;
   return {
     ...status,
     // The storage root is configuration, not a credential: echo it raw so the
@@ -96,24 +108,46 @@ function settingsBody(restartRequired = false) {
     models: { ...status.models, [DATA_DIR_ENV]: configured },
     mediaDir: uploadDir(),
     dataDir: profile.rootDir,
-    ...(restartRequired ? { restartRequired: true } : {}),
+    ...(restartRequired || pending ? { restartRequired: true } : {}),
+    ...(relocation ? { lastRelocation: relocation } : {}),
   };
 }
 
-/** Apply a storage-root change: validate, copy the existing data, record the
- *  pointer. The active profile resolved at startup, so the move only takes
- *  effect on the next launch; the caller reports that to the user.
+/** A move into a folder that already holds OpenChatCut projects needs the
+ *  user's explicit choice; the settings page asks and resubmits. */
+export class DataDirConflictError extends Error {
+  readonly code = 'data-dir-has-data';
+  readonly newestMtimeMs: number | null;
+  constructor(dir: string, newestMtimeMs: number | null) {
+    super(`${dir} already contains OpenChatCut projects`
+      + (newestMtimeMs ? ` (last changed ${new Date(newestMtimeMs).toISOString()})` : '')
+      + '. Choose whether to replace them with your current projects (they are kept as a backup) or to use them.');
+    this.name = 'DataDirConflictError';
+    this.newestMtimeMs = newestMtimeMs;
+  }
+}
+
+/** Patch field carrying that choice; never stored. */
+export const DATA_DIR_EXISTING_FIELD = 'OPENCHATCUT_DATA_DIR_EXISTING';
+
+export interface DataDirChangeResult { warning?: string }
+
+/** Apply a storage-root change: validate, pre-copy media, and record the move
+ *  as pending. The projects themselves are copied by the next launch, before
+ *  the store opens (server/data-dir-relocation.ts), so edits made after saving
+ *  this setting are not left behind in the old folder.
  *
- *  Media is copied separately from the RESOLVED upload directory, not from
- *  `<root>/media`: in the default profile uploads live outside the root (the
- *  checkout's `public/media/uploads`, or `userData/...` when packaged), so
- *  copying the root's own `media` folder would move an empty directory and
- *  take every `/media/uploads/...` reference offline after the restart. */
+ *  Media is copied from the RESOLVED upload directory, not from `<root>/media`:
+ *  in the default profile uploads live outside the root (the checkout's
+ *  `public/media/uploads`, or `userData/...` when packaged), so copying the
+ *  root's own `media` folder would move an empty directory and take every
+ *  `/media/uploads/...` reference offline after the restart. */
 async function applyDataDirChange(
   raw: string,
+  existingChoice: unknown,
   profile: RuntimeProfile,
   log: (msg: string) => void,
-): Promise<void> {
+): Promise<DataDirChangeResult> {
   if (process.env[DATA_DIR_ENV]?.trim()) {
     throw new Error(`storage directory is pinned by ${DATA_DIR_ENV} and cannot be changed from settings`);
   }
@@ -128,20 +162,40 @@ async function applyDataDirChange(
   // elsewhere. Treating it as "no move" would skip both the SQLite refusal and
   // the copy, and lose the projects exactly like the case this guards against.
   const destination = target ?? defaultRootDir(profile);
-  if (destination !== profile.rootDir) {
-    const outcome = await relocateDataDir(profile.rootDir, destination, log, sqliteStoreEnabled());
-    if (outcome.refused === 'sqlite-store-active') {
-      throw new Error(
-        'the project store has been migrated to SQLite and cannot be relocated yet: '
-        + 'moving a live database needs a quiesced snapshot, which this setting does not do',
-      );
-    }
-    // Uploads are addressed by name through uploadReadDirs(), so the copy must
-    // land where the relocated profile will resolve its writable upload dir.
-    const mediaDestination = relocatedMediaDestination(target, destination, DEFAULT_UPLOAD_DIR);
-    await syncUploadDirectories(uploadDir(profile), mediaDestination, log);
+  if (destination === profile.rootDir) {
+    // Back to where the app already runs: cancel any pending move.
+    clearPendingRelocation();
+    await writeDataDirPointer(target);
+    return {};
   }
-  await writeDataDirPointer(target);
+  if (sqliteStoreEnabled()) {
+    throw new Error(
+      'the project store has been migrated to SQLite and cannot be relocated yet: '
+      + 'moving a live database needs a quiesced snapshot, which this setting does not do',
+    );
+  }
+  const choice = existingChoice === 'replace' || existingChoice === 'use-existing' ? existingChoice : null;
+  const existing = projectDataIn(destination);
+  if (existing.entries.length && !choice) throw new DataDirConflictError(destination, existing.newestMtimeMs);
+  const mediaFrom = uploadDir(profile);
+  // Uploads are addressed by name through uploadReadDirs(), so the copy must
+  // land where the relocated profile will resolve its writable upload dir.
+  const mediaTo = relocatedMediaDestination(target, destination, DEFAULT_UPLOAD_DIR);
+  if (choice !== 'use-existing') await syncUploadDirectories(mediaFrom, mediaTo, log);
+  writePendingRelocation({
+    version: 1,
+    fromRoot: profile.rootDir,
+    toRoot: destination,
+    targetPointer: target,
+    fromMedia: mediaFrom,
+    toMedia: mediaTo,
+    existing: existing.entries.length ? choice ?? 'none' : 'none',
+    requestedAt: new Date().toISOString(),
+  });
+  log(`[data-dir] move to ${destination} scheduled for the next launch`);
+  return isCloudSyncedPath(destination)
+    ? { warning: 'This folder is synced by a cloud client (OneDrive, Dropbox, iCloud or Google Drive). Sync clients can lock, rewrite or keep files online-only while OpenChatCut writes them; a local folder is safer.' }
+    : {};
 }
 
 export function settingsPlugin(): Plugin {
@@ -192,15 +246,19 @@ export function settingsPlugin(): Plugin {
             // The storage root is not a keystore key (the keystore lives inside
             // it): handle and strip it before setKeys sees the patch.
             let dataDirChanged = false;
+            let dataDirWarning: string | undefined;
             if (Object.hasOwn(patch, DATA_DIR_ENV)) {
-              await applyDataDirChange(
+              const result = await applyDataDirChange(
                 String(patch[DATA_DIR_ENV] ?? ''),
+                patch[DATA_DIR_EXISTING_FIELD],
                 profile,
                 (msg) => server.config.logger.info(msg),
               );
               delete patch[DATA_DIR_ENV];
               dataDirChanged = true;
+              dataDirWarning = result.warning;
             }
+            delete patch[DATA_DIR_EXISTING_FIELD];
             const previousMediaDir = uploadDir(profile);
             if ('MEDIA_DIR' in patch) {
               const rawMediaDir = String(patch.MEDIA_DIR ?? '');
@@ -214,14 +272,19 @@ export function settingsPlugin(): Plugin {
               );
             }
             await setKeys(patch);
-            sendJson(res, 200, settingsBody(dataDirChanged));
+            sendJson(res, 200, { ...settingsBody(dataDirChanged), ...(dataDirWarning ? { dataDirWarning } : {}) });
             return;
           }
           sendJson(res, 405, { error: 'method not allowed — use GET or POST' });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           server.config.logger.error(`[settings] ${message}`);  // message only — never a key value
-          if (!res.headersSent) sendJson(res, isCapabilityDenied(error) ? 403 : 400, { error: message });
+          if (!res.headersSent) {
+            const conflict = error instanceof DataDirConflictError
+              ? { code: error.code, newestMtimeMs: error.newestMtimeMs }
+              : {};
+            sendJson(res, isCapabilityDenied(error) ? 403 : error instanceof DataDirConflictError ? 409 : 400, { error: message, ...conflict });
+          }
         }
       });
     },

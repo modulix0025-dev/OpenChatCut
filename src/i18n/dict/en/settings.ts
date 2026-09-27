@@ -628,4 +628,10 @@ export default {
   '该模型不在内置目录，以上数值为估算（上下文 {context} / 输出 {output}）。若与实际不符，点「展开」手动修改。': 'This model is not in the built-in catalog, so these values are estimates (context {context} / output {output}). If they do not match the real model, expand and adjust them manually.',
   '额外模型': 'Extra models',
   '列表中没有的模型 ID，用逗号分隔（如 claude-opus-5-5）。保存后点击“读取模型”即可选择。': 'Model IDs missing from the list, comma-separated (for example claude-opus-5-5). Save, then click “Load models” to pick one.',
+  '所选文件夹里已经有 OpenChatCut 工程（最后修改：{when}）。\n\n确定：用你当前的工程替换它们（原有数据会保留为备份）。\n取消：不替换，下一步可选择改用该文件夹里已有的工程。': 'The chosen folder already contains OpenChatCut projects (last changed: {when}).\n\nOK: replace them with your current projects (the existing data is kept as a backup).\nCancel: do not replace; next you can choose to use the projects already in that folder.',
+  '改用该文件夹里已有的工程？当前工程保留在原位置，不会被删除。': 'Use the projects already in that folder? Your current projects stay where they are and are not deleted.',
+  '已保存 · 重启应用后将移动工程并使用新的存储目录': 'Saved · your projects move to the new storage folder when the app restarts',
+  '注意：该文件夹由云盘同步（OneDrive、Dropbox、iCloud 或 Google Drive），同步程序可能锁定、改写文件或只保留在线副本，建议使用本地文件夹。': 'Note: this folder is synced by a cloud client (OneDrive, Dropbox, iCloud or Google Drive). Sync clients can lock, rewrite or keep files online-only; a local folder is safer.',
+  '上次移动工程存储目录失败，仍在使用原目录 {from}：{error}': 'The last storage folder move failed; still using {from}: {error}',
+  '未知': 'unknown',
 } as Record<string, string>;

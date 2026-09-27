@@ -59,6 +59,8 @@ export interface KeyStatusResponse {
   /** Set by the save response when the change only lands on the next launch
    *  (project storage folder: the runtime profile resolves at startup). */
   restartRequired?: boolean;
+  /** Outcome of the last storage-folder move performed at startup (kept a week). */
+  lastRelocation?: { ok: boolean; at: string; fromRoot: string; toRoot: string; error?: string; backups?: readonly string[] };
 }
 export const secret = (name: string, label: string): SettingsField => ({ name, label, kind: 'secret' });
 export const text = (

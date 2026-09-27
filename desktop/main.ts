@@ -1,4 +1,5 @@
 import './chdir-first.ts';
+import '../server/apply-pending-relocation.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';

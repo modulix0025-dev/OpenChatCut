@@ -464,6 +464,12 @@ const overrides: Record<string, string> = {
   '未配置时素材只存本机。配置后：每次上传同步写入 R2（桶保持私有，读取经本地服务回源，src 路径不变）；本机缺文件时自动从云端取回。改动即时生效。R2 控制台建桶 → R2 API Token（Object Read & Write）即可拿到下面四个值。': 'Senza configurazione i media restano solo sul computer. Dopo la configurazione ogni caricamento viene scritto anche su R2; il bucket resta privato, la lettura passa dal servizio locale e il percorso src non cambia. Se manca un file locale, viene recuperato automaticamente dal cloud. Le modifiche hanno effetto immediato. Crea un bucket nella console R2 e un token API R2 con Object Read & Write per ottenere i quattro valori seguenti.',
   '额外模型': 'Modelli aggiuntivi',
   '列表中没有的模型 ID，用逗号分隔（如 claude-opus-5-5）。保存后点击“读取模型”即可选择。': 'ID di modelli assenti dall’elenco, separati da virgole (ad esempio claude-opus-5-5). Salva, poi fai clic su “Leggi modelli” per sceglierne uno.',
+  '所选文件夹里已经有 OpenChatCut 工程（最后修改：{when}）。\n\n确定：用你当前的工程替换它们（原有数据会保留为备份）。\n取消：不替换，下一步可选择改用该文件夹里已有的工程。': 'La cartella scelta contiene già progetti OpenChatCut (ultima modifica: {when}).\n\nOK: sostituiscili con i progetti attuali (i dati esistenti restano come backup).\nAnnulla: non sostituire; poi potrai scegliere di usare i progetti già presenti.',
+  '改用该文件夹里已有的工程？当前工程保留在原位置，不会被删除。': 'Usare i progetti già presenti in quella cartella? I progetti attuali restano dove sono e non vengono eliminati.',
+  '已保存 · 重启应用后将移动工程并使用新的存储目录': 'Salvato · i progetti verranno spostati nella nuova cartella al riavvio',
+  '注意：该文件夹由云盘同步（OneDrive、Dropbox、iCloud 或 Google Drive），同步程序可能锁定、改写文件或只保留在线副本，建议使用本地文件夹。': 'Attenzione: questa cartella è sincronizzata da un servizio cloud (OneDrive, Dropbox, iCloud o Google Drive), che può bloccare, riscrivere o tenere i file solo online; è più sicura una cartella locale.',
+  '上次移动工程存储目录失败，仍在使用原目录 {from}：{error}': 'L’ultimo spostamento della cartella non è riuscito; in uso ancora {from}: {error}',
+  '未知': 'sconosciuto',
 };
 
 export default overrides;

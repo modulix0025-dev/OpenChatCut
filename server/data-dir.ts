@@ -74,7 +74,7 @@ export async function checkDataDir(raw: string, currentDir: string): Promise<Dat
  *  default profile uploads live outside the root (checkout `public/media/uploads`
  *  or packaged `userData/...`), so it is copied separately from the resolved
  *  upload directory. Anything else in the root is regenerated and left behind. */
-const RELOCATED_ENTRIES = [
+export const RELOCATED_ENTRIES = [
   'project-store-v1',
   'project-store-v1.json',
   'project-store-auth-v1',

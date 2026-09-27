@@ -1,3 +1,4 @@
+import '../server/apply-pending-relocation.ts';
 import { defineConfig, loadEnv, searchForWorkspaceRoot, type Plugin } from 'vite';
 import { parse as parseDotenv } from 'dotenv';
 import react from '@vitejs/plugin-react';
