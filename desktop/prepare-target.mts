@@ -67,7 +67,9 @@ async function ensureChrome(t: Target): Promise<string> {
   }
   await rm(dir, { recursive: true, force: true });
   await mkdir(dir, { recursive: true });
-  execFileSync('tar', ['-xf', zip, '-C', dir]);
+  // bsdtar (macOS/Windows) reads zip; GNU tar on Linux does not.
+  if (process.platform === 'linux') execFileSync('unzip', ['-q', zip, '-d', dir]);
+  else execFileSync('tar', ['-xf', zip, '-C', dir]);
   if (!existsSync(marker)) throw new Error(`unzip produced no ${marker}`);
   if (t.bin === 'chrome-headless-shell') await chmod(marker, 0o755);
   return dir;
