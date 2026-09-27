@@ -5,7 +5,26 @@ Built on 2026-09-27 from commit `d424cbe` (branch
 (Node 24.21.0, Wine 9.0), using `npm run desktop:dist:win:all`. Later commits
 change only documentation.
 
-## Distributables
+## Official downloadable build (GitHub Actions, real Windows runner)
+
+Workflow `Windows hardened build`, run
+[36310597591](https://github.com/modulix0025-dev/OpenChatCut/actions/runs/36310597591),
+commit `2de9bdc`, `windows-latest`. Every step passed: `npm audit` (0
+vulnerabilities), the security regression suite (4 suites), packaging, fuse and
+runtime-file checks, and a silent install. The packaged smoke test ran against
+the installed app and printed `security boundaries ok` and `SMOKE-OK`,
+including a real frame render. The uninstaller also ran.
+
+| File (artifact `OpenChatCut-windows-x64-hardened`) | SHA-256 |
+|---|---|
+| `OpenChatCut-0.2.14-x64.exe` | `fc0209f876eb2ffefcbfe8702fd9473e9f5364292a0eada4447f8a9fb6aa5719` |
+| `OpenChatCut-Portable-0.2.14-x64.exe` | `ee251552270b0b028f26f1782da73b1d3fa9df5494f6d9f5a6de11660d130798` |
+
+The Linux cross-build below was the verification build (ClamAV scan, package
+inspection). Its hashes differ from the CI build because the installers embed
+build timestamps.
+
+## Distributables (Linux cross-build, verification)
 
 | File | Size (bytes) | SHA-256 |
 |---|---|---|
@@ -84,6 +103,7 @@ were obtained.
 | Full repository suite (`pretest` + `test:serial` + `posttest`, 631 commands) | 626 pass. 5 fail **identically on the unmodified base commit** because this environment's egress policy blocks `remotion.media` and HuggingFace downloads (`notoSansOffline`, `hf-proxy`, `video-decoder-render`, `clipFxExport`, `clipFxExport.offthread`) |
 | Typecheck (`tsc -b`), lint (`oxlint`) | clean |
 | Packaged Linux build smoke (same code, `CC_SMOKE=1 CC_SMOKE_RENDER=1`, Xvfb, unprivileged user, fresh profile) | **SMOKE-OK**: embedded server, external MCP endpoint, security boundaries (anonymous request → 403, no Node.js in the page, CSP blocked an injected inline script, `window.open` denied), sandboxed preload APIs, a real frame render through the bundled Chrome Headless Shell + compositor. The audit log recorded the rejected request and the blocked popup |
+| Packaged smoke on real Windows (CI run 36310597591) | **SMOKE-OK**, `security boundaries ok`, render ok, install and uninstall ok |
 | Windows build under Wine 9 | main process, embedded server and editor window start. The smoke probe's Node-side `fetch` fails under Wine's network emulation, so the full Windows smoke must run on real Windows (`.github/workflows/windows-hardened.yml`, or the existing `desktop.yml` Windows job) |
 
 The cross-build found and fixed two packaging defects that a native Windows
