@@ -180,8 +180,19 @@ async function ensureWindowsWhisper(): Promise<void> {
   const spec = PLATFORMS['win32-x64']!;
   const targetDir = join(ROOT, 'public', 'whisper-cli', 'win32-x64');
   const binPath = join(targetDir, spec.executable);
+  // The Vite build already copied public/ into dist/ (packaged via
+  // extraResources) before this step runs, so the staged runtime is mirrored
+  // there too; a native Windows build gets it from the prebuild hook instead.
+  const mirrorIntoDist = async (): Promise<void> => {
+    if (!existsSync(join(ROOT, 'dist'))) return;
+    const distDir = join(ROOT, 'dist', 'whisper-cli', 'win32-x64');
+    await rm(distDir, { recursive: true, force: true });
+    await cp(targetDir, distDir, { recursive: true });
+    console.log('[prepare] whisper-cli win32-x64 mirrored into dist/');
+  };
   if (existsSync(binPath) && existsSync(binPath + PROVENANCE_SUFFIX)) {
     console.log('[prepare] whisper-cli win32-x64 ok');
+    await mirrorIntoDist();
     return;
   }
   const url = `https://github.com/ggml-org/whisper.cpp/releases/download/${VERSION}/${spec.asset}`;
@@ -211,6 +222,7 @@ async function ensureWindowsWhisper(): Promise<void> {
   }, null, 2)}\n`);
   await rm(zip, { force: true });
   console.log(`[prepare] whisper-cli win32-x64 staged (archive sha256 verified)`);
+  await mirrorIntoDist();
 }
 
 async function main(): Promise<void> {

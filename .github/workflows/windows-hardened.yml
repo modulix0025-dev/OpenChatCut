@@ -1,0 +1,110 @@
+# Hardened Windows distributables: builds the NSIS installer and the portable
+# executable on a real Windows runner, runs the security regression suite and
+# the packaged smoke test (which asserts the security boundaries in the running
+# app), then uploads both executables with SHA-256 checksums.
+#
+# Manual trigger only. No signing secrets are used or required; the output is
+# unsigned (see security/CODE_SIGNING.md).
+name: Windows hardened build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-hardened-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    name: Build, verify and smoke-test (Windows x64)
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --loglevel=error
+        env:
+          ONNXRUNTIME_NODE_INSTALL: 'skip'
+      - name: Dependency audit
+        run: npm audit --audit-level=high
+      - name: Security regression suite
+        run: npm run verify:security
+      - name: Ensure Remotion browser
+        run: node -e "import('@remotion/renderer').then(m => m.ensureBrowser()).then(() => console.log('browser ready'))"
+
+      - name: Package installer and portable executable
+        run: npm run desktop:dist:win:all
+
+      - name: Verify package hardening
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          npx --no-install @electron/fuses read --app release/win-unpacked/OpenChatCut.exe
+          $fuses = npx --no-install @electron/fuses read --app release/win-unpacked/OpenChatCut.exe | Out-String
+          foreach ($expected in @('RunAsNode is Disabled', 'EnableNodeOptionsEnvironmentVariable is Disabled',
+                                  'EnableNodeCliInspectArguments is Disabled', 'OnlyLoadAppFromAsar is Enabled',
+                                  'EnableEmbeddedAsarIntegrityValidation is Enabled')) {
+            if ($fuses -notmatch [regex]::Escape($expected)) { throw "Fuse check failed: $expected" }
+          }
+          foreach ($required in @('resources/dist/whisper-cli/win32-x64/whisper-cli.exe',
+                                  'resources/app.asar.unpacked/node_modules/ffmpeg-static/ffmpeg.exe')) {
+            if (-not (Test-Path -LiteralPath (Join-Path 'release/win-unpacked' $required))) { throw "Package is missing $required" }
+          }
+          $maps = @(Get-ChildItem -LiteralPath release/win-unpacked/resources/dist -Recurse -Filter '*.map' -File)
+          if ($maps.Count -ne 0) { throw "Source maps shipped: $($maps.Count)" }
+
+      - name: Smoke test installed application
+        shell: pwsh
+        env:
+          CC_SMOKE: '1'
+          CC_SMOKE_RENDER: '1'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = @(Get-ChildItem -LiteralPath release -Filter 'OpenChatCut-*-x64.exe' -File |
+            Where-Object { $_.Name -notlike '*Portable*' })
+          if ($installer.Count -ne 1) { throw "Expected one installer, found $($installer.Count)" }
+          $installDir = Join-Path $env:RUNNER_TEMP "openchatcut-hardened-$PID"
+          $install = Start-Process -FilePath $installer[0].FullName -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Installer exited with $($install.ExitCode)" }
+          $exe = Join-Path $installDir 'OpenChatCut.exe'
+          $out = Join-Path $env:RUNNER_TEMP 'hardened-smoke.log'
+          $err = Join-Path $env:RUNNER_TEMP 'hardened-smoke.err'
+          $smoke = Start-Process -FilePath $exe -PassThru -RedirectStandardOutput $out -RedirectStandardError $err
+          $null = $smoke.Handle
+          $finished = $smoke.WaitForExit(420000)
+          if (-not $finished) { taskkill /T /F /PID $smoke.Id 2>$null | Out-Null }
+          Get-Content -LiteralPath $out
+          Get-Content -LiteralPath $err
+          if (-not (Select-String -LiteralPath $out -Pattern 'security boundaries ok' -Quiet)) { throw 'Security smoke did not pass' }
+          if (-not (Select-String -LiteralPath $out -Pattern 'SMOKE-OK' -Quiet)) { throw 'Smoke test did not pass' }
+          $uninstaller = @(Get-ChildItem -LiteralPath $installDir -Filter 'Uninstall*.exe' -File)
+          $uninstall = Start-Process -FilePath $uninstaller[0].FullName -ArgumentList '/S' -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "Uninstaller exited with $($uninstall.ExitCode)" }
+
+      - name: Software bill of materials
+        run: npx --yes @cyclonedx/cyclonedx-npm@4 --omit dev --output-format JSON --output-file release/openchatcut-sbom.cdx.json
+
+      - name: Checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem -LiteralPath release -Filter '*.exe' -File | ForEach-Object {
+            "$((Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLower())  $($_.Name)"
+          } | Set-Content -LiteralPath release/SHA256SUMS.txt -Encoding ascii
+          Get-Content -LiteralPath release/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: OpenChatCut-windows-x64-hardened
+          path: |
+            release/*.exe
+            release/SHA256SUMS.txt
+            release/latest-x64.yml
+            release/openchatcut-sbom.cdx.json
+          if-no-files-found: error
+          compression-level: 0
