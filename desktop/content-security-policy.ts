@@ -8,7 +8,7 @@
  * 'wasm-unsafe-eval' is required for WebAssembly decoders and models. Neither
  * permits loading script from anywhere but the editor origin.
  * Network sinks stay open to https: because generation providers return media
- * on arbitrary CDNs; see docs/security/THREAT_MODEL.md.
+ * on arbitrary CDNs; see security/THREAT_MODEL.md.
  */
 export function editorContentSecurityPolicy(): string {
   return [

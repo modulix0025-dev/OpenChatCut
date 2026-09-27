@@ -22,7 +22,7 @@
 //
 // The packaged desktop app additionally serves a Content-Security-Policy that
 // forbids inline and remote scripts, so injected markup cannot execute code.
-// This is still not a hard VM boundary; see docs/security/THREAT_MODEL.md.
+// This is still not a hard VM boundary; see security/THREAT_MODEL.md.
 import * as React from 'react';
 import {
   useCurrentFrame, useVideoConfig, interpolate, interpolateColors,

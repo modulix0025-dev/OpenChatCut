@@ -195,7 +195,7 @@ export default {
     requestedExecutionLevel: 'asInvoker',
     legalTrademarks: 'OpenChatCut',
     // Signing is configured only through CSC_LINK / CSC_KEY_PASSWORD (or
-    // WIN_CSC_LINK) in the build environment; see docs/security/CODE_SIGNING.md.
+    // WIN_CSC_LINK) in the build environment; see security/CODE_SIGNING.md.
     // Unsigned builds are expected to trigger SmartScreen.
   },
   nsis: {
