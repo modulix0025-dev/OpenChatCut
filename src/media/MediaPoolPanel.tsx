@@ -83,6 +83,7 @@ export function MediaPoolPanel({
   const {
     inputRef, busy, setBusy, uploadRatio, canPickDirectory,
     pickFiles, pickDirectory, handleDrop,
+    failedImports, retryFailedImport, dismissFailedImport,
   } = fileImport;
   const { available: canWatchDirectory, busy: watchBusy, activeWatch, start: startWatch, stop: stopWatch } = directoryImport;
   const [query, setQuery] = useState('');
@@ -393,6 +394,13 @@ export function MediaPoolPanel({
         {currentFolder && <button aria-label={t('删除空文件夹')} disabled={assets.some((asset) => asset.folderId === currentFolder.id) || folders.some((folder) => folder.parentId === currentFolder.id)} onClick={deleteFolder}>{t('删除')}</button>}
       </div>}
       {(error ?? directoryImportError) && <div className="cc-media-error">{error ?? directoryImportError}</div>}
+      {failedImports.length > 0 && <ul className="cc-media-failed" aria-label={t('导入失败的文件')}>
+        {failedImports.map((entry) => <li key={entry.id}>
+          <span className="cc-media-failed-message">{entry.message}</span>
+          <button disabled={busy} onClick={() => { void retryFailedImport(entry.id); }}>{t('重试')}</button>
+          <button aria-label={t('忽略')} onClick={() => dismissFailedImport(entry.id)}>×</button>
+        </li>)}
+      </ul>}
       {busy && <div className="cc-media-status">{t('正在导入素材…')}</div>}
       {assets.length > 0 && <div className="cc-media-export-guide">{t('点击素材右上角“⋯”：图片、视频和音频可下载原文件，MG 可导出透明 MOV。')}</div>}
 

@@ -233,4 +233,6 @@ export default {
   '上一条': 'Previous',
   '下一条': 'Next',
   '暂无文字稿': 'No transcript yet',
+  '「{name}」导入失败：{reason}': 'Could not import “{name}”: {reason}',
+  '导入失败的文件': 'Files that failed to import',
 } as Record<string, string>;

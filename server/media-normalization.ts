@@ -17,6 +17,7 @@ import {
   throwIfNormalizationAborted,
 } from './media-normalization-admission.ts';
 import { ffmpegThreadArgs, spawnMediaProcess } from './media-process.ts';
+import { collectOutput, importProbeArgs } from './process-output.ts';
 export {
   createNormalizeAdmission,
   normalizationAbortError,
@@ -91,7 +92,7 @@ function run(
   throwIfNormalizationAborted(signal);
   const deferred = Promise.withResolvers<{ stdout: string; stderr: string }>();
   const child = spawnMediaProcess(cmd, [...ffmpegThreadArgs(), ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
-  let stdout = '';
+  const stdoutCollector = collectOutput(cmd);
   let stderr = '';
   let settled = false;
   let terminalError: Error | undefined;
@@ -100,8 +101,15 @@ function run(
     settled = true;
     clearTimeout(timer);
     signal?.removeEventListener('abort', onAbort);
-    if (error) deferred.reject(error);
-    else deferred.resolve({ stdout, stderr });
+    if (error) {
+      deferred.reject(error);
+      return;
+    }
+    try {
+      deferred.resolve({ stdout: stdoutCollector.text(), stderr });
+    } catch (overflow) {
+      deferred.reject(overflow as Error);
+    }
   };
   const onAbort = (): void => {
     terminalError = normalizationAbortError(signal);
@@ -111,9 +119,7 @@ function run(
     terminalError = new Error(`${cmd} timed out after ${Math.round(timeoutMs / 1000)}s`);
     child.kill('SIGKILL');
   }, timeoutMs);
-  child.stdout?.on('data', (chunk: Buffer) => {
-    stdout = `${stdout}${String(chunk)}`.slice(-1_000_000);
-  });
+  child.stdout?.on('data', (chunk: Buffer) => stdoutCollector.push(chunk));
   child.stderr?.on('data', (chunk: Buffer) => {
     stderr = `${stderr}${String(chunk)}`.slice(-8_000);
   });
@@ -212,11 +218,7 @@ export function rotationOf(video: Record<string, unknown>): number {
 export async function probeVideo(path: string, signal?: AbortSignal): Promise<ProbeMeta> {
   const { stdout } = await run(
     ffprobeBin(),
-    [
-      '-v', 'error',
-      '-show_streams', '-show_format', '-of', 'json',
-      path,
-    ],
+    importProbeArgs(path),
     30_000,
     signal,
   );

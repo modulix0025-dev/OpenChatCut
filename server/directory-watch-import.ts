@@ -14,6 +14,7 @@ import {
   importLocalMedia,
   type LocalMediaImport,
 } from './local-media-import.ts';
+import { collectOutput, importProbeArgs } from './process-output.ts';
 
 const KIND_BY_EXTENSION: Record<string, DirectoryImportMediaKind> = {
   '.mp4': 'video', '.m4v': 'video', '.mov': 'video', '.webm': 'video',
@@ -240,7 +241,7 @@ function runProbeProcess(args: readonly string[], signal?: AbortSignal): Promise
   throwIfNormalizationAborted(signal);
   const deferred = Promise.withResolvers<string>();
   const child = spawnMediaProcess(ffprobeBin(), [...args], { stdio: ['ignore', 'pipe', 'pipe'] });
-  let stdout = '';
+  const stdout = collectOutput('ffprobe');
   let stderr = '';
   let terminalError: Error | undefined;
   const onAbort = (): void => {
@@ -251,7 +252,7 @@ function runProbeProcess(args: readonly string[], signal?: AbortSignal): Promise
     terminalError = new Error('directory media probe timed out');
     child.kill('SIGKILL');
   }, 30_000);
-  child.stdout.on('data', (chunk: Buffer) => { stdout = `${stdout}${String(chunk)}`.slice(-1_000_000); });
+  child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
   child.stderr.on('data', (chunk: Buffer) => { stderr = `${stderr}${String(chunk)}`.slice(-8_000); });
   child.once('error', (error) => {
     clearTimeout(timer);
@@ -262,8 +263,14 @@ function runProbeProcess(args: readonly string[], signal?: AbortSignal): Promise
     clearTimeout(timer);
     signal?.removeEventListener('abort', onAbort);
     if (terminalError) deferred.reject(terminalError);
-    else if (code === 0) deferred.resolve(stdout);
-    else deferred.reject(new Error(`ffprobe failed (${code ?? closeSignal ?? 'unknown'}): ${stderr.slice(-500)}`));
+    else if (code !== 0) deferred.reject(new Error(`ffprobe failed (${code ?? closeSignal ?? 'unknown'}): ${stderr.slice(-500)}`));
+    else {
+      try {
+        deferred.resolve(stdout.text());
+      } catch (overflow) {
+        deferred.reject(overflow as Error);
+      }
+    }
   });
   signal?.addEventListener('abort', onAbort, { once: true });
   if (signal?.aborted) onAbort();
@@ -276,9 +283,7 @@ export async function probeDirectoryMedia(
   signal?: AbortSignal,
 ): Promise<DirectoryMediaProbe> {
   if (kind === 'svg') return {};
-  const raw = await runProbeProcess([
-    '-v', 'error', '-show_streams', '-show_format', '-of', 'json', path,
-  ], signal);
+  const raw = await runProbeProcess(importProbeArgs(path), signal);
   const output = JSON.parse(raw) as {
     streams?: Array<Record<string, unknown>>;
     format?: Record<string, unknown>;

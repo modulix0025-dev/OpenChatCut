@@ -21,6 +21,7 @@ import { spawnMediaProcess } from '../media-process.ts';
 import { resolveProductAsset } from '../product-assets.ts';
 import { safePublicFetch } from '../safe-public-fetch.ts';
 import { readJsonBody, sendJson } from './export-http.ts';
+import { collectOutput, importProbeArgs } from '../process-output.ts';
 
 const UPLOAD_PREFIX = '/media/uploads/';
 const PROBE_TIMEOUT_MS = 30_000;
@@ -53,17 +54,15 @@ export function resolveProbeSource(source: string): ProbeSource {
 
 function runFfprobe(path: string): Promise<string> {
   const deferred = Promise.withResolvers<string>();
-  const child = spawnMediaProcess(ffprobeBin(), [
-    '-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', path,
-  ], { stdio: ['ignore', 'pipe', 'pipe'] });
-  let stdout = '';
+  const child = spawnMediaProcess(ffprobeBin(), importProbeArgs(path), { stdio: ['ignore', 'pipe', 'pipe'] });
+  const stdout = collectOutput('ffprobe');
   let stderr = '';
   let timedOut = false;
   const timer = setTimeout(() => {
     timedOut = true;
     child.kill('SIGKILL');
   }, PROBE_TIMEOUT_MS);
-  child.stdout.on('data', (chunk: Buffer) => { stdout += String(chunk); });
+  child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
   child.stderr.on('data', (chunk: Buffer) => { stderr += String(chunk); });
   child.on('error', (error) => {
     clearTimeout(timer);
@@ -72,13 +71,19 @@ function runFfprobe(path: string): Promise<string> {
   child.on('close', (code) => {
     clearTimeout(timer);
     if (timedOut) deferred.reject(new Error(`ffprobe timed out after ${PROBE_TIMEOUT_MS}ms`));
-    else if (code === 0) deferred.resolve(stdout);
+    else if (code === 0) {
+      try {
+        deferred.resolve(stdout.text());
+      } catch (overflow) {
+        deferred.reject(overflow as Error);
+      }
+    }
     else deferred.reject(new Error(`ffprobe exited ${code ?? 'unknown'}: ${stderr.trim().slice(-400) || 'unreadable media'}`));
   });
   return deferred.promise;
 }
 
-/** Raw `ffprobe -show_streams -show_format` JSON for one local file. */
+/** ffprobe JSON (streams + format, without tags) for one local file. */
 export async function probeMediaFile(path: string): Promise<Record<string, unknown>> {
   const stdout = await runFfprobe(path);
   const parsed: unknown = JSON.parse(stdout || '{}');

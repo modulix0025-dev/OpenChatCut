@@ -38,4 +38,7 @@ export default {
   '停止监听文件夹「{dir}」': 'Interrompi il monitoraggio della cartella “{dir}”',
   '正在选择监听文件夹…': 'Selezione della cartella da monitorare...',
   '监听文件夹（自动导入新素材）…': 'Monitora cartella (importa automaticamente i nuovi media)...',
+  '「{name}」导入失败：{reason}': 'Impossibile importare “{name}”: {reason}',
+  '导入失败的文件': 'File non importati',
+  '重试': 'Riprova',
 } as Record<string, string>;

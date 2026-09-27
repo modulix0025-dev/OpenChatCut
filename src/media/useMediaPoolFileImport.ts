@@ -11,7 +11,13 @@ import {
   type DirectoryScanResult,
 } from './directoryDrop';
 import { mediaImportErrorMessage } from './mediaImportConflict';
-import { importMediaBatch } from './mediaPoolImport';
+import { importMediaBatch, MediaImportFailure } from './mediaPoolImport';
+
+export interface FailedMediaImport {
+  readonly id: string;
+  readonly file: File;
+  readonly message: string;
+}
 
 interface ImportLifecycle {
   onPlaceholder?: (asset: MediaAsset) => void;
@@ -42,6 +48,10 @@ interface MediaPoolFileImportState {
   pickFiles: (files: FileList | readonly File[] | null, folderId?: string) => Promise<boolean>;
   pickDirectory: (folderId?: string) => Promise<void>;
   handleDrop: (transfer: DataTransfer, folderId?: string) => Promise<void>;
+  /** Files that failed in this session; they stay listed until retried or dismissed. */
+  failedImports: readonly FailedMediaImport[];
+  retryFailedImport: (id: string) => Promise<void>;
+  dismissFailedImport: (id: string) => void;
 }
 
 function directoryNotice(result: DirectoryScanResult, t: typeof translate): string | null {
@@ -131,6 +141,7 @@ export function useMediaPoolFileImport(options: UseMediaPoolFileImportOptions): 
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [uploadRatio, setUploadRatio] = useState<number | null>(null);
+  const [failedImports, setFailedImports] = useState<readonly FailedMediaImport[]>([]);
   const importFiles = useCallback<ImportFiles>(async (files, folderId, targetFolderIds) => {
     if (!files?.length) return true;
     setBusy(true);
@@ -141,6 +152,17 @@ export function useMediaPoolFileImport(options: UseMediaPoolFileImportOptions): 
         files: Array.from(files), targetFolderId: folderId, targetFolderIds, onImport, onMoveAssets,
         onProgress: (ratio) => setUploadRatio((current) => Math.max(current ?? 0, ratio)),
       });
+      const failures = completionErrors.filter((reason): reason is MediaImportFailure => reason instanceof MediaImportFailure);
+      if (failures.length) {
+        setFailedImports((current) => [
+          ...current.filter((entry) => !failures.some((failure) => failure.file === entry.file)),
+          ...failures.map((failure) => ({
+            id: `${failure.file.name}:${failure.file.size}:${failure.file.lastModified}`,
+            file: failure.file,
+            message: mediaImportErrorMessage(failure),
+          })),
+        ]);
+      }
       if (completionErrors.length) throw completionErrors[0];
       setUploadRatio(1);
       return true;
@@ -156,9 +178,18 @@ export function useMediaPoolFileImport(options: UseMediaPoolFileImportOptions): 
   const pickFiles = useCallback<PickFiles>((files, folderId) => (
     importFiles(files, folderId)
   ), [importFiles]);
+  const dismissFailedImport = useCallback((id: string) => {
+    setFailedImports((current) => current.filter((entry) => entry.id !== id));
+  }, []);
+  const retryFailedImport = useCallback(async (id: string) => {
+    const entry = failedImports.find((candidate) => candidate.id === id);
+    if (!entry) return;
+    setFailedImports((current) => current.filter((candidate) => candidate.id !== id));
+    await importFiles([entry.file]);
+  }, [failedImports, importFiles]);
   const directory = useDirectoryFileActions(importFiles, onCreateFolder, setError, t);
   return {
     inputRef, busy, setBusy, uploadRatio, canPickDirectory: canPickMediaFolder(),
-    pickFiles, ...directory,
+    pickFiles, ...directory, failedImports, retryFailedImport, dismissFailedImport,
   };
 }

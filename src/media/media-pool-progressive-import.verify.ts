@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import type { MediaAsset } from '../editor/types';
 import { MediaImportCancelledError } from './mediaImportConflict';
-import { importMediaBatch } from './mediaPoolImport';
+import { importMediaBatch, MediaImportFailure } from './mediaPoolImport';
 
 const failedProbe = new Error('unsupported media type');
 const starts: string[] = [];
@@ -20,7 +20,19 @@ const firstBatchErrors = await importMediaBatch({
 });
 
 assert.deepEqual(starts, ['bad.txt', 'good.mov'], '单文件在 placeholder 前失败后仍须继续导入后续文件');
-assert.deepEqual(firstBatchErrors, [failedProbe], '批次结束后只汇总实际导入失败');
+assert.equal(firstBatchErrors.length, 1, '批次结束后只汇总实际导入失败');
+const [firstFailure] = firstBatchErrors as MediaImportFailure[];
+assert.ok(firstFailure instanceof MediaImportFailure, 'each failure keeps its file for the UI and retry');
+assert.equal(firstFailure.file.name, 'bad.txt');
+assert.equal(firstFailure.reason, failedProbe);
+{
+  const { mediaImportErrorMessage } = await import('./mediaImportConflict');
+  const probeFailure = new MediaImportFailure({ name: 'LTX-2.5_i2v_00020_.mp4' } as File,
+    new Error('视频兼容性处理失败：ffprobe output exceeded 64 MB; refusing to parse a truncated result'));
+  const message = mediaImportErrorMessage(probeFailure);
+  assert.match(message, /LTX-2\.5_i2v_00020_\.mp4/, 'the failure names the file');
+  assert.match(message, /ffprobe output exceeded 64 MB/, 'and keeps the actual reason');
+}
 
 const conflictStarts: string[] = [];
 const conflictPlacements: string[] = [];

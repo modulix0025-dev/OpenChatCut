@@ -1,6 +1,18 @@
 import type { MediaAsset } from '../editor/types';
 import { isMediaImportCancelled } from './mediaImportConflict';
 
+/** One file that failed to import, kept with its file so the UI can name it and retry. */
+export class MediaImportFailure extends Error {
+  readonly file: File;
+  readonly reason: unknown;
+  constructor(file: File, reason: unknown) {
+    super(reason instanceof Error ? reason.message : String(reason ?? ''));
+    this.name = 'MediaImportFailure';
+    this.file = file;
+    this.reason = reason;
+  }
+}
+
 interface MediaImportLifecycle {
   onPlaceholder?: (asset: MediaAsset) => void;
   onAssetUpdated?: (asset: MediaAsset) => void;
@@ -57,7 +69,8 @@ export async function importMediaBatch({
     const recordFailure = (reason: unknown) => {
       if (!failureRecorded && !isMediaImportCancelled(reason)) {
         failureRecorded = true;
-        completionErrors.push(reason);
+        console.error(`[media-import] ${file.name}:`, reason);
+        completionErrors.push(new MediaImportFailure(file, reason));
       }
       settleStarted();
     };

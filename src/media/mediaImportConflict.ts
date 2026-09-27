@@ -28,6 +28,11 @@ export function isMediaImportCancelled(error: unknown): error is MediaImportCanc
 /** Convert internal/server import failures into localized, user-facing status text. */
 export function mediaImportErrorMessage(error: unknown): string {
   if (isMediaImportCancelled(error)) return t('已取消上传同名素材');
+  // A failed file from a batch: name it, then explain the underlying reason.
+  const failed = error as { name?: unknown; file?: { name?: unknown }; reason?: unknown } | null;
+  if (failed?.name === 'MediaImportFailure' && typeof failed.file?.name === 'string') {
+    return t('「{name}」导入失败：{reason}', { name: failed.file.name, reason: mediaImportErrorMessage(failed.reason) });
+  }
   const message = error instanceof Error ? error.message : String(error ?? '');
   const partFailure = message.match(/part\s+(\d+)\s+failed\s*\((\d+)\)/i);
   if (partFailure) return t('上传第 {part} 个分片失败（{status}）', { part: partFailure[1]!, status: partFailure[2]! });
@@ -36,10 +41,12 @@ export function mediaImportErrorMessage(error: unknown): string {
   if (/failed to fetch|networkerror|network request failed|load failed/i.test(message)) {
     return t('网络连接失败，请检查网络后重试');
   }
+  // Keep the actual reason (e.g. "ffprobe output exceeded 64 MB", "no video
+  // stream"): a bare "failed, retry" left users with no way to act on it.
   const compatibilityDetail = message.match(/^视频兼容性处理失败：(.+)$/u)?.[1]?.trim();
-  if ((compatibilityDetail && !/[\u3400-\u9fff]/u.test(compatibilityDetail))
-    || /video compatibility (?:check|processing) failed|media normalization failed|\bffmpeg\b|\bffprobe\b|timed out after/i.test(message)) {
-    return t('视频兼容性处理失败，请重试');
+  if (compatibilityDetail) return t('视频兼容性处理失败：{error}', { error: compatibilityDetail });
+  if (/video compatibility (?:check|processing) failed|media normalization failed|\bffmpeg\b|\bffprobe\b|timed out after/i.test(message)) {
+    return t('视频兼容性处理失败：{error}', { error: message });
   }
   const httpFailure = message.match(/\bHTTP\s+(\d{3})\b/i);
   if (httpFailure) return t('素材请求失败（{status}）', { status: httpFailure[1]! });

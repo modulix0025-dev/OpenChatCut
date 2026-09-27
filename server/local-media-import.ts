@@ -3,6 +3,7 @@ import { stat } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
 import { ffmpegBin, ffprobeBin } from './media-binaries.ts';
 import { ffmpegThreadArgs, spawnMediaProcess } from './media-process.ts';
+import { collectOutput } from './process-output.ts';
 import { resolveUploadFile, uploadDir } from './media-dir.ts';
 import { registerMediaReference } from './media-references.ts';
 import { normalizeSha256Hash } from '../shared/content-hash.ts';
@@ -51,7 +52,7 @@ function run(
   throwIfNormalizationAborted(signal);
   const deferred = Promise.withResolvers<string>();
   const child = spawnMediaProcess(command, [...ffmpegThreadArgs(), ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
-  let stdout = '';
+  const stdout = collectOutput(command);
   let stderr = '';
   let terminalError: Error | undefined;
   const onAbort = (): void => {
@@ -62,7 +63,7 @@ function run(
     terminalError = new Error(`${command} timed out after ${Math.round(timeoutMs / 1_000)}s`);
     child.kill('SIGKILL');
   }, timeoutMs);
-  child.stdout?.on('data', (chunk: Buffer) => { stdout = `${stdout}${String(chunk)}`.slice(-1_000_000); });
+  child.stdout?.on('data', (chunk: Buffer) => stdout.push(chunk));
   child.stderr?.on('data', (chunk: Buffer) => { stderr = `${stderr}${String(chunk)}`.slice(-8_000); });
   child.once('error', (error) => {
     clearTimeout(timer);
@@ -73,8 +74,14 @@ function run(
     clearTimeout(timer);
     signal?.removeEventListener('abort', onAbort);
     if (terminalError) deferred.reject(terminalError);
-    else if (code === 0) deferred.resolve(stdout);
-    else deferred.reject(new Error(`${command} exited ${code}: ${stderr.slice(-500)}`));
+    else if (code !== 0) deferred.reject(new Error(`${command} exited ${code}: ${stderr.slice(-500)}`));
+    else {
+      try {
+        deferred.resolve(stdout.text());
+      } catch (overflow) {
+        deferred.reject(overflow as Error);
+      }
+    }
   });
   signal?.addEventListener('abort', onAbort, { once: true });
   if (signal?.aborted) onAbort();
