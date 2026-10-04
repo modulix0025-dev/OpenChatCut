@@ -3,6 +3,37 @@ export interface ClaudeCodeAccountSummary {
   readonly email: string | null;
   readonly subscriptionType: string | null;
   readonly authMethod: string | null;
+  readonly orgName?: string | null;
+  readonly apiProvider?: string | null;
+}
+
+export type ClaudeCodeLoginAccountType = 'claudeai' | 'console';
+
+/** One in-app `claude auth login` run. Never carries a token. */
+export interface ClaudeCodeLoginState {
+  readonly id: string;
+  readonly status: 'starting' | 'waiting' | 'code-submitted' | 'succeeded' | 'failed' | 'cancelled';
+  readonly accountType: ClaudeCodeLoginAccountType;
+  readonly email: string | null;
+  /** The Claude authorization page, for when the browser did not open by itself. */
+  readonly authUrl: string | null;
+  /** The CLI asked for a code from the authorization page. */
+  readonly codePrompt: boolean;
+  readonly error: string | null;
+  readonly startedAt: number;
+}
+
+export interface ClaudeCodeLoginStartRequest {
+  readonly accountType?: ClaudeCodeLoginAccountType;
+  readonly email?: string;
+  readonly sso?: boolean;
+}
+
+export interface ClaudeCodeConnectionTestResult {
+  readonly ok: boolean;
+  readonly message: string;
+  readonly durationMs: number;
+  readonly model?: string;
 }
 
 export interface ClaudeCodeAgentStatus {
@@ -10,6 +41,12 @@ export interface ClaudeCodeAgentStatus {
   readonly version: string | null;
   readonly account: ClaudeCodeAccountSummary | null;
   readonly error?: string;
+  /** Path of the CLI this app runs, so the user can tell which install is used. */
+  readonly path?: string | null;
+  /** The running (or last) in-app sign-in. */
+  readonly login?: ClaudeCodeLoginState | null;
+  /** Names of environment variables that override the browser sign-in. */
+  readonly envOverrides?: readonly string[];
 }
 
 export interface ClaudeCodeAgentModel {

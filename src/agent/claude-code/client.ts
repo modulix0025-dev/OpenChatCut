@@ -1,6 +1,9 @@
 import type {
   ClaudeCodeAgentModelsResponse,
   ClaudeCodeAgentStatus,
+  ClaudeCodeConnectionTestResult,
+  ClaudeCodeLoginStartRequest,
+  ClaudeCodeLoginState,
 } from '../../../shared/claude-code-agent';
 
 async function responseError(response: Response): Promise<Error> {
@@ -30,4 +33,28 @@ export function fetchClaudeCodeStatus(): Promise<ClaudeCodeAgentStatus> {
 
 export function fetchClaudeCodeModels(): Promise<ClaudeCodeAgentModelsResponse> {
   return requestJson<ClaudeCodeAgentModelsResponse>('/api/claude-code/models');
+}
+
+function postJson(body: unknown = {}): RequestInit {
+  return { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) };
+}
+
+export function startClaudeCodeLogin(request: ClaudeCodeLoginStartRequest): Promise<ClaudeCodeLoginState> {
+  return requestJson<ClaudeCodeLoginState>('/api/claude-code/login/start', postJson(request));
+}
+
+export function submitClaudeCodeLoginCode(loginId: string, code: string): Promise<ClaudeCodeLoginState> {
+  return requestJson<ClaudeCodeLoginState>('/api/claude-code/login/code', postJson({ loginId, code }));
+}
+
+export async function cancelClaudeCodeLogin(loginId?: string): Promise<void> {
+  await requestJson<unknown>('/api/claude-code/login/cancel', postJson(loginId ? { loginId } : {}));
+}
+
+export async function logoutClaudeCode(): Promise<void> {
+  await requestJson<unknown>('/api/claude-code/logout', postJson());
+}
+
+export function testClaudeCodeConnection(model?: string): Promise<ClaudeCodeConnectionTestResult> {
+  return requestJson<ClaudeCodeConnectionTestResult>('/api/claude-code/test', postJson(model ? { model } : {}));
 }

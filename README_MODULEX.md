@@ -118,7 +118,7 @@ that address in the permission dialog.
 | Setting | Where | Default |
 |---|---|---|
 | Extra Claude Code models | Agent → Anthropic · Claude Code → *Extra models* | none; the list comes from the model catalog, plus Opus 5.5 and Fable 5.1 |
-| Claude Code turn timeout | same page → *Turn timeout (seconds)* | 600 s (60–7200) |
+| Claude Code turn timeout | same page → *Turn timeout (seconds)* | 6000 s (60–7200) |
 | Imported files | Storage → *Imported files* | copy into the project library (`MEDIA_IMPORT_MODE=link` keeps files in place) |
 | Orphaned external edit sessions | browser localStorage `EXTERNAL_SESSION_ORPHAN_MINUTES` | 5 minutes |
 

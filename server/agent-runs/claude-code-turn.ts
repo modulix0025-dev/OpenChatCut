@@ -27,10 +27,11 @@ import {
 import { toolResultText } from '../claude-code/turn-runner.ts';
 import { getKey } from '../keystore.ts';
 
-const DEFAULT_TURN_TIMEOUT_SECONDS = 600;
+const DEFAULT_TURN_TIMEOUT_SECONDS = 6000;
 
 /** Overall limit for one Claude Code turn: CLAUDE_CODE_TURN_TIMEOUT_SECONDS
- *  (60 s – 2 h), default 10 minutes. */
+ *  (60 s – 2 h), default 6000 s (100 minutes): long edits, renders and
+ *  generations inside one turn routinely outlived the old 10-minute limit. */
 export function claudeCodeTurnTimeoutMs(setting: string = getKey('CLAUDE_CODE_TURN_TIMEOUT_SECONDS')): number {
   const seconds = Number(setting);
   if (!setting.trim() || !Number.isFinite(seconds)) return DEFAULT_TURN_TIMEOUT_SECONDS * 1000;

@@ -190,8 +190,7 @@ const overrides: Record<string, string> = {
 
   '内置 Agent 可使用 Anthropic API Key，也可以在下方「Anthropic · Claude Code」页用 Claude 订阅登录（无需 API Key）。独立运行的 Claude Code 会话也可以通过「外部 Agent 接入 (MCP)」驱动 OpenChatCut。':
     'L’Agent integrato puo usare una API Key Anthropic, oppure accedere con un abbonamento Claude nella pagina “Anthropic · Claude Code” qui sotto (senza API Key). Una sessione Claude Code autonoma puo anche pilotare OpenChatCut tramite “Agenti esterni (MCP)”.',
-  '使用 Claude 订阅登录，由官方 Claude Code CLI 管理凭据、续期与退出，OpenChatCut 不会读取或显示 OAuth 凭据。在终端运行 claude auth login（或 claude setup-token 获取长期令牌）完成登录后，点击“重新检测”。':
-    'Accedi con un abbonamento Claude. La CLI ufficiale Claude Code gestisce credenziali, rinnovo e logout; OpenChatCut non legge ne mostra credenziali OAuth. Esegui claude auth login (o claude setup-token per un token a lungo termine) nel terminale, poi fai clic su “Ricontrolla”.',
+  '使用 Claude 订阅登录，由官方 Claude Code CLI 管理凭据、续期与退出，OpenChatCut 不会读取或显示 OAuth 凭据。点击“在浏览器中登录”并选择账号即可完成授权，切换账号或退出也在这里完成。': 'Accedi con un abbonamento Claude. La CLI ufficiale di Claude Code gestisce credenziali, rinnovo e uscita; OpenChatCut non legge né mostra le credenziali OAuth. Fai clic su “Accedi dal browser” e scegli un account per autorizzare; anche il cambio account e l’uscita avvengono qui.',
   'Claude Code 模型': 'Modello Claude Code',
   'Claude Code 默认模型': 'Modello Claude Code predefinito',
   '登录后可从可用模型中选择，也可以手动填写别名（如 sonnet / opus / haiku）。':
@@ -484,6 +483,41 @@ const overrides: Record<string, string> = {
   '复制会占用额外磁盘空间，但工程不再依赖原文件的位置；引用适合很大的原始素材。引用的文件被移动后，素材库会标记为离线，可用“重新链接”找回。': 'La copia occupa spazio su disco in più, ma il progetto non dipende più dalla posizione dell’originale; il collegamento è adatto a master molto grandi. Se un file collegato viene spostato, la libreria lo segna offline e “Ricollega” lo ritrova.',
   '复制到工程素材库（默认）': 'Copia nella libreria del progetto (predefinito)',
   '只引用原位置': 'Collega alla posizione originale',
+  // Claude Code in-app sign-in and connection test
+  '环境变量 {names} 会覆盖浏览器登录的账号。要使用这里登录的账号，请删除该环境变量并重启 OpenChatCut。': 'La variabile d’ambiente {names} ha la precedenza sull’account collegato dal browser. Per usare l’account collegato qui, rimuovi la variabile e riavvia OpenChatCut.',
+  '连接正常：Claude 已回复（{seconds} 秒{model}）。': 'Connessione OK: Claude ha risposto ({seconds} s{model}).',
+  '连接失败：{message}': 'Connessione non riuscita: {message}',
+  '切换到另一个 Claude 账号': 'Passa a un altro account Claude',
+  '选择要连接的账号': 'Scegli l’account da collegare',
+  '账号类型': 'Tipo di account',
+  'Claude 订阅账号': 'Account con abbonamento Claude',
+  'Pro / Max / Team / Enterprise，按订阅额度计费。': 'Pro / Max / Team / Enterprise, conteggiato sui limiti del piano.',
+  'Anthropic Console 账号': 'Account Anthropic Console',
+  '按 API 用量计费（console.anthropic.com）。': 'Fatturato in base all’uso dell’API (console.anthropic.com).',
+  '邮箱': 'Email',
+  '可选：填写邮箱后，Claude 登录页会预先选中这个账号。浏览器里已登录其他账号时也可以在授权页切换。': 'Facoltativo: con un’email, la pagina di accesso Claude preseleziona quell’account. Se il browser usa un altro account puoi cambiarlo anche nella pagina di autorizzazione.',
+  '使用公司 SSO 登录': 'Accedi con l’SSO aziendale',
+  '在浏览器中登录': 'Accedi dal browser',
+  '浏览器应已打开 Claude 授权页面。如果没有打开，请点击下面的链接。': 'Il browser dovrebbe aver aperto la pagina di autorizzazione di Claude. In caso contrario, usa il link qui sotto.',
+  '正在等待 Claude Code 打开浏览器…': 'In attesa che Claude Code apra il browser…',
+  '打开 Claude 授权页面': 'Apri la pagina di autorizzazione di Claude',
+  '授权码': 'Codice di autorizzazione',
+  '如果页面显示授权码，请粘贴到这里': 'Se la pagina mostra un codice, incollalo qui',
+  '授权码已提交，正在完成登录…': 'Codice inviato, accesso in completamento…',
+  '也可以在终端登录': 'Oppure accedi da un terminale',
+  '选择要连接的账号，然后在浏览器中完成 Claude 授权。': 'Scegli l’account da collegare, poi completa l’autorizzazione di Claude nel browser.',
+  '等待 Claude 授权': 'In attesa dell’autorizzazione di Claude',
+  '请在浏览器中的 Claude 授权页面点击“Authorize”，完成后会自动刷新。': 'Fai clic su “Authorize” nella pagina di Claude nel browser; lo stato si aggiorna da solo.',
+  '组织：{org}': 'Organizzazione: {org}',
+  '登录方式：{method}': 'Metodo di accesso: {method}',
+  '正在测试连接…': 'Verifica della connessione…',
+  '切换账号': 'Cambia account',
+  'Claude 登录失败：{message}': 'Accesso a Claude non riuscito: {message}',
+  '请重试。': 'Riprova.',
+  '无法启动 Claude 登录：{message}': 'Impossibile avviare l’accesso a Claude: {message}',
+  '授权码提交失败：{message}': 'Impossibile inviare il codice: {message}',
+  '无法退出 Claude 登录：{message}': 'Impossibile uscire da Claude: {message}',
+  '提交': 'Invia',
 };
 
 export default overrides;

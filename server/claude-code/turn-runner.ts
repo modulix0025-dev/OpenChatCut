@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { ClaudeCodeTurnRequest, ClaudeCodeTurnStreamEvent } from '../../shared/claude-code-agent.ts';
 import { claudeCodeCommand } from './command.ts';
+import { claudeCodeChildEnvironment } from './environment.ts';
 
 /**
  * Unlike Codex's app-server (a long-lived JSON-RPC process with a
@@ -17,18 +18,6 @@ import { claudeCodeCommand } from './command.ts';
  * output for display. No tool-result settlement RPC exists or is needed.
  */
 
-const CHILD_ENV_NAMES = [
-  'PATH', 'Path', 'PATHEXT',
-  'HOME', 'USER', 'LOGNAME', 'USERPROFILE', 'USERNAME',
-  'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA',
-  'SystemRoot', 'WINDIR', 'COMSPEC', 'ComSpec',
-  'TMPDIR', 'TMP', 'TEMP',
-  'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ',
-  'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
-  'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy',
-  'SSL_CERT_FILE', 'SSL_CERT_DIR', 'NODE_EXTRA_CA_CERTS', 'NODE_USE_ENV_PROXY',
-  'NO_COLOR', 'FORCE_COLOR',
-] as const;
 
 // Deliberately NOT plain "openchatcut": Claude Code caches MCP auth failures by
 // SERVER NAME, not by URL, in ~/.claude/mcp-needs-auth-cache.json. Users commonly
@@ -52,7 +41,7 @@ const ALLOWED_TOOLS = `mcp__${MCP_SERVER_NAME}__*`;
  * Bash/Write/Edit run unapproved as the server user — in dev, inside the
  * checkout that holds `.env.local`.
  */
-const DENIED_TOOLS = [
+export const DENIED_TOOLS = [
   'Bash', 'BashOutput', 'KillShell', 'Read', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit',
   'Glob', 'Grep', 'WebFetch', 'WebSearch', 'Task', 'Agent',
 ].join(' ');
@@ -101,14 +90,6 @@ export class ClaudeCodeProcessError extends Error {
   }
 }
 
-function childEnvironment(): NodeJS.ProcessEnv {
-  const environment: NodeJS.ProcessEnv = {};
-  for (const name of CHILD_ENV_NAMES) {
-    const value = process.env[name];
-    if (value !== undefined) environment[name] = value;
-  }
-  return environment;
-}
 
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -331,7 +312,7 @@ export async function runClaudeCodeTurn(
     if (request.sessionId) args.push('--resume', request.sessionId);
     const command = claudeCodeCommand(claudePath, args);
     const child = spawn(command.executable, command.args, {
-      env: childEnvironment(),
+      env: claudeCodeChildEnvironment(),
       // Restricted mode scopes the CLI's file tools to its working directory.
       // Point that at the same throwaway directory as the MCP config (removed in
       // the finally below) instead of inheriting the app's checkout, where the

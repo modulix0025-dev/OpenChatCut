@@ -97,7 +97,7 @@ const CLAUDE_CODE_PAGE: SettingsVendorPage = {
   title: 'Anthropic · Claude Code',
   connection: 'claude-code',
   note: '使用 Claude 订阅登录，由官方 Claude Code CLI 管理凭据、续期与退出，OpenChatCut 不会读取或显示 OAuth 凭据。'
-    + '在终端运行 claude auth login（或 claude setup-token 获取长期令牌）完成登录后，点击“重新检测”。',
+    + '点击“在浏览器中登录”并选择账号即可完成授权，切换账号或退出也在这里完成。',
   fields: [
     {
       name: 'CLAUDE_CODE_MODEL', label: 'Claude Code 模型', kind: 'text',
@@ -109,7 +109,7 @@ const CLAUDE_CODE_PAGE: SettingsVendorPage = {
       note: '列表中没有的模型 ID，用逗号分隔（如 claude-opus-5-5）。保存后点击“读取模型”即可选择。',
     },
     {
-      name: 'CLAUDE_CODE_TURN_TIMEOUT_SECONDS', label: '单轮超时（秒）', kind: 'text', defaultLabel: '600',
+      name: 'CLAUDE_CODE_TURN_TIMEOUT_SECONDS', label: '单轮超时（秒）', kind: 'text', defaultLabel: '6000',
       note: '一轮最长运行时间，60–7200 秒。超过 90 秒没有进展时，聊天里会提示正在等待什么。',
     },
   ],

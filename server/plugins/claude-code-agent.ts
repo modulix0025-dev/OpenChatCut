@@ -5,6 +5,8 @@ import type {
   ClaudeCodeAccountSummary,
   ClaudeCodeAgentModelsResponse,
   ClaudeCodeAgentStatus,
+  ClaudeCodeConnectionTestResult,
+  ClaudeCodeLoginState,
   ClaudeCodeTurnRequest,
   ClaudeCodeTurnStreamEvent,
 } from '../../shared/claude-code-agent.ts';
@@ -16,10 +18,23 @@ import {
 } from '../claude-code/installation.ts';
 import { runClaudeCodeTurn } from '../claude-code/turn-runner.ts';
 import { claudeCodeModelList } from '../claude-code/models.ts';
+import { claudeCodeChildEnvironment, claudeCodeEnvOverrides } from '../claude-code/environment.ts';
+import {
+  ClaudeCodeLoginError,
+  ClaudeCodeLoginManager,
+  logoutClaudeCode,
+  validAccountType,
+  validLoginEmail,
+} from '../claude-code/login.ts';
+import { testClaudeCodeConnection } from '../claude-code/connection-test.ts';
 import { getKey } from '../keystore.ts';
 
 const JSON_BODY_LIMIT = 4 * 1024 * 1024;
-const AUTH_STATUS_TIMEOUT_MS = 8_000;
+// A cold start of the npm (node) CLI on Windows routinely takes several
+// seconds; 8 s made a healthy install read as "could not read sign-in status".
+const AUTH_STATUS_TIMEOUT_MS = 25_000;
+
+const loginManager = new ClaudeCodeLoginManager();
 
 // Canonical model ids, not the CLI's short aliases ("sonnet"/"opus"/"haiku").
 // The CLI accepts both and resolves an alias to exactly these ids (a `--model
@@ -125,48 +140,92 @@ function accountSummary(value: Record<string, unknown>): ClaudeCodeAccountSummar
     email: typeof value.email === 'string' ? value.email : null,
     subscriptionType: typeof value.subscriptionType === 'string' ? value.subscriptionType : null,
     authMethod: typeof value.authMethod === 'string' ? value.authMethod : null,
+    orgName: typeof value.orgName === 'string' ? value.orgName : null,
+    apiProvider: typeof value.apiProvider === 'string' ? value.apiProvider : null,
   };
 }
 
-async function readAuthStatus(claudePath: string): Promise<ClaudeCodeAccountSummary | null> {
+type AuthStatusResult =
+  | { readonly account: ClaudeCodeAccountSummary; readonly error?: undefined }
+  | { readonly account: null; readonly error: string };
+
+async function readAuthStatus(claudePath: string): Promise<AuthStatusResult> {
   const { execFile } = await import('node:child_process');
+  const { tmpdir } = await import('node:os');
   const { claudeCodeCommand } = await import('../claude-code/command.ts');
   const command = claudeCodeCommand(claudePath, ['auth', 'status', '--json']);
-  const { promise, resolve } = Promise.withResolvers<ClaudeCodeAccountSummary | null>();
+  const { promise, resolve } = Promise.withResolvers<AuthStatusResult>();
   execFile(command.executable, command.args, {
     encoding: 'utf8',
+    // Same environment as the turn: what this reports is what a turn will use.
+    env: claudeCodeChildEnvironment(),
+    cwd: tmpdir(),
     timeout: AUTH_STATUS_TIMEOUT_MS,
     maxBuffer: 64 * 1024,
     windowsHide: true,
     windowsVerbatimArguments: command.windowsVerbatimArguments,
-  }, (error, stdout) => {
-    if (error) { resolve(null); return; }
+  }, (error, stdout, stderr) => {
+    // `auth status` exits non-zero when signed out but still prints the JSON.
     try {
       const parsed = object(JSON.parse(stdout));
-      resolve(parsed ? accountSummary(parsed) : null);
+      if (parsed) { resolve({ account: accountSummary(parsed) }); return; }
     } catch {
-      resolve(null);
+      // fall through to the error below
     }
+    const killed = error && (error as { killed?: boolean }).killed;
+    const detail = `${stderr}\n${stdout}`.trim().split(/\r?\n/).filter(Boolean).at(-1)?.slice(0, 300);
+    resolve({
+      account: null,
+      error: killed
+        ? `Claude Code did not answer within ${AUTH_STATUS_TIMEOUT_MS / 1000} s (claude auth status).`
+        : `Could not read Claude Code sign-in status${detail ? `: ${detail}` : '.'}`,
+    });
   });
   return promise;
 }
 
 async function claudeCodeStatus(): Promise<ClaudeCodeAgentStatus> {
+  const extras = { login: loginManager.current(), envOverrides: claudeCodeEnvOverrides() };
   const installation = await inspectClaudeCodeInstallation();
-  if (!installation.installed) return { installed: false, version: null, account: null };
+  if (!installation.installed) return { installed: false, version: null, account: null, path: null, ...extras };
   if (!installation.supported || !installation.path) {
-    return { installed: true, version: installation.version, account: null, error: unsupportedMessage() };
-  }
-  const account = await readAuthStatus(installation.path);
-  if (!account) {
     return {
-      installed: true,
-      version: installation.version,
-      account: null,
-      error: 'Could not read Claude Code sign-in status.',
+      installed: true, version: installation.version, account: null, path: installation.path,
+      error: unsupportedMessage(), ...extras,
     };
   }
-  return { installed: true, version: installation.version, account };
+  const status = await readAuthStatus(installation.path);
+  return {
+    installed: true,
+    version: installation.version,
+    account: status.account,
+    path: installation.path,
+    ...(status.error ? { error: status.error } : {}),
+    ...extras,
+  };
+}
+
+async function requireClaudeCodePath(): Promise<string> {
+  const installation = await inspectClaudeCodeInstallation();
+  if (!installation.path || !installation.supported) throw new HttpError(503, unavailableMessage(installation));
+  return installation.path;
+}
+
+async function startLogin(body: Record<string, unknown>): Promise<ClaudeCodeLoginState> {
+  const accountType = validAccountType(body.accountType);
+  const email = validLoginEmail(body.email);
+  const sso = body.sso === true;
+  return loginManager.start(await requireClaudeCodePath(), { accountType, ...(email ? { email } : {}), sso });
+}
+
+async function logout(): Promise<void> {
+  loginManager.cancel();
+  await logoutClaudeCode(await requireClaudeCodePath());
+}
+
+async function testConnection(body: Record<string, unknown>): Promise<ClaudeCodeConnectionTestResult> {
+  const model = typeof body.model === 'string' && body.model ? cliToken(body.model, 'model') : undefined;
+  return testClaudeCodeConnection(await requireClaudeCodePath(), model);
 }
 
 function claudeCodeModels(): ClaudeCodeAgentModelsResponse {
@@ -267,7 +326,26 @@ async function handleClaudeCodeRequest(req: IncomingMessage, res: ServerResponse
   if (path === '/status' && req.method === 'GET') return sendJson(res, 200, await claudeCodeStatus());
   if (path === '/models' && req.method === 'GET') return sendJson(res, 200, claudeCodeModels());
   if (path === '/turn' && req.method === 'POST') return streamTurn(req, res, await readJson(req));
-  const known = ['/status', '/models', '/turn'];
+  if (path === '/login/start' && req.method === 'POST') return sendJson(res, 200, await startLogin(await readJson(req)));
+  if (path === '/login/code' && req.method === 'POST') {
+    const body = await readJson(req);
+    return sendJson(res, 200, loginManager.submitCode(
+      shortString(body.loginId, 'loginId', 128),
+      shortString(body.code, 'code', 2048),
+    ));
+  }
+  if (path === '/login/cancel' && req.method === 'POST') {
+    const body = await readJson(req);
+    loginManager.cancel(typeof body.loginId === 'string' ? body.loginId : undefined);
+    return sendJson(res, 200, { ok: true });
+  }
+  if (path === '/logout' && req.method === 'POST') {
+    await readJson(req);
+    await logout();
+    return sendJson(res, 200, { ok: true });
+  }
+  if (path === '/test' && req.method === 'POST') return sendJson(res, 200, await testConnection(await readJson(req)));
+  const known = ['/status', '/models', '/turn', '/login/start', '/login/code', '/login/cancel', '/logout', '/test'];
   if (known.includes(path)) throw new HttpError(405, 'method not allowed');
   throw new HttpError(404, 'not found');
 }
@@ -277,7 +355,8 @@ function handleFailure(res: ServerResponse, error: unknown): void {
     if (!res.writableEnded && !res.destroyed) res.end();
     return;
   }
-  if (error instanceof HttpError) sendJson(res, error.status, { error: error.message });
+  if (error instanceof HttpError || error instanceof ClaudeCodeLoginError) sendJson(res, error.status, { error: error.message });
+  else if (error instanceof Error && /^invalid (model|sessionId)$/.test(error.message)) sendJson(res, 400, { error: error.message });
   else sendJson(res, 500, { error: 'Claude Code request failed.' });
 }
 

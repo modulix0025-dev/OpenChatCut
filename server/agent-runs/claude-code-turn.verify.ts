@@ -437,11 +437,12 @@ console.log('server agent claude-code turn verification passed');
 }
 {
   const { claudeCodeTurnTimeoutMs } = await import('./claude-code-turn');
-  assert.equal(claudeCodeTurnTimeoutMs(''), 600_000, 'default 10 minutes');
+  assert.equal(claudeCodeTurnTimeoutMs(''), 6_000_000, 'default 6000 seconds');
   assert.equal(claudeCodeTurnTimeoutMs('1800'), 1_800_000);
   assert.equal(claudeCodeTurnTimeoutMs('5'), 60_000, 'at least a minute');
   assert.equal(claudeCodeTurnTimeoutMs('999999'), 7_200_000, 'at most two hours');
-  assert.equal(claudeCodeTurnTimeoutMs('abc'), 600_000);
+  assert.equal(claudeCodeTurnTimeoutMs('abc'), 6_000_000);
+  assert.equal(claudeCodeTurnTimeoutMs('600'), 600_000, 'an explicit setting still wins');
 }
 
 console.log('claude-code-turn.verify: session resume, fallback and invalidation passed');
