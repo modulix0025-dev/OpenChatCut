@@ -166,6 +166,6 @@
   "overrides": {
     "onnxruntime-web": "1.29.0",
     "adm-zip": "0.6.1",
-    "sharp": "0.35.4"
+    "sharp": "0.35.5"
   }
 }
