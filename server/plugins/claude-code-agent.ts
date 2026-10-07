@@ -27,6 +27,7 @@ import {
   validLoginEmail,
 } from '../claude-code/login.ts';
 import { testClaudeCodeConnection } from '../claude-code/connection-test.ts';
+import { installClaudeCode } from '../claude-code/installer.ts';
 import { getKey } from '../keystore.ts';
 
 const JSON_BODY_LIMIT = 4 * 1024 * 1024;
@@ -345,7 +346,11 @@ async function handleClaudeCodeRequest(req: IncomingMessage, res: ServerResponse
     return sendJson(res, 200, { ok: true });
   }
   if (path === '/test' && req.method === 'POST') return sendJson(res, 200, await testConnection(await readJson(req)));
-  const known = ['/status', '/models', '/turn', '/login/start', '/login/code', '/login/cancel', '/logout', '/test'];
+  if (path === '/install' && req.method === 'POST') {
+    await readJson(req);
+    return sendJson(res, 200, await installClaudeCode());
+  }
+  const known = ['/status', '/models', '/turn', '/login/start', '/login/code', '/login/cancel', '/logout', '/test', '/install'];
   if (known.includes(path)) throw new HttpError(405, 'method not allowed');
   throw new HttpError(404, 'not found');
 }

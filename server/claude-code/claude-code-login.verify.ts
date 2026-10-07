@@ -167,3 +167,45 @@ process.stdin.on('data', (chunk) => {
 }
 
 console.log('claude-code-login.verify: sign-in, code, cancel, timeout, env and connection test passed');
+
+// ── official installer + Windows install locations ─────────────────────────
+{
+  const { claudeCodeInstallerCommand, installClaudeCode } = await import('./installer.ts');
+  const { windowsCandidates } = await import('./installation.ts');
+  const win = claudeCodeInstallerCommand('win32');
+  assert.match(win.executable, /WindowsPowerShell\\v1\.0\\powershell\.exe$/);
+  assert.equal(win.args.at(-1)?.endsWith('irm https://claude.ai/install.ps1 | iex'), true, 'the documented Windows command');
+  assert.deepEqual(claudeCodeInstallerCommand('darwin').args, ['-c', 'set -o pipefail; curl -fsSL https://claude.ai/install.sh | bash']);
+  const found = async () => '/home/me/.local/bin/claude';
+  const notFound = async () => null;
+
+  const ok = await installClaudeCode({ locate: found, command: { executable: process.execPath, args: ['-e', 'console.log("\\u001b[32mClaude Code successfully installed!\\u001b[0m")'] } });
+  assert.deepEqual([ok.ok, ok.message], [true, 'Claude Code successfully installed!\n/home/me/.local/bin/claude']);
+  const silent = await installClaudeCode({ locate: notFound, command: { executable: process.execPath, args: ['-e', ''] } });
+  assert.equal(silent.ok, false, 'exit 0 without a CLI afterwards is a failure');
+  assert.match(silent.message, /not found afterwards/);
+  const piped = await installClaudeCode({ locate: found, command: { executable: '/bin/bash', args: ['-c', 'set -o pipefail; false | bash'] } });
+  assert.equal(piped.ok, false, 'a failed download in the pipe fails the install');
+  const failed = await installClaudeCode({ command: { executable: process.execPath, args: ['-e', 'console.error("download failed: 403"); process.exit(1)'] } });
+  assert.deepEqual([failed.ok, failed.message], [false, 'download failed: 403']);
+  const missing = await installClaudeCode({ command: { executable: '/nonexistent/installer', args: [] } });
+  assert.equal(missing.ok, false);
+  assert.match(missing.message, /Could not start the installer/);
+  const slow = { executable: process.execPath, args: ['-e', 'setTimeout(() => console.log("done"), 300)'] };
+  const [a, b] = await Promise.all([installClaudeCode({ command: slow, locate: found }), installClaudeCode({ command: slow, locate: found })]);
+  assert.equal(a, b, 'concurrent installs share one run');
+  const timedOut = await installClaudeCode({ command: { executable: process.execPath, args: ['-e', 'setInterval(() => {}, 1000)'] }, timeoutMs: 200 });
+  assert.match(timedOut.message, /did not finish/);
+
+  const saved = { ...process.env };
+  Object.assign(process.env, { USERPROFILE: 'C:/Users/me', APPDATA: 'C:/Users/me/AppData/Roaming', LOCALAPPDATA: 'C:/Users/me/AppData/Local' });
+  const candidates = windowsCandidates().map((path) => path.replace(/\\/g, '/'));
+  process.env = saved;
+  for (const expected of [
+    'C:/Users/me/.local/bin/claude.exe',
+    'C:/Users/me/AppData/Local/Microsoft/WinGet/Links/claude.exe',
+    'C:/Users/me/AppData/Roaming/npm/claude.cmd',
+    'C:/Users/me/scoop/shims/claude.exe',
+  ]) assert.ok(candidates.includes(expected), `probes ${expected}`);
+}
+console.log('claude-code-login.verify: installer and Windows install locations passed');

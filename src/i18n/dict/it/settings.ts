@@ -518,6 +518,12 @@ const overrides: Record<string, string> = {
   '授权码提交失败：{message}': 'Impossibile inviare il codice: {message}',
   '无法退出 Claude 登录：{message}': 'Impossibile uscire da Claude: {message}',
   '提交': 'Invia',
+  'OpenChatCut 通过官方 Claude Code CLI 连接 Claude。点击下面的按钮运行 Anthropic 官方安装程序（无需管理员权限），完成后会自动重新检测。': 'OpenChatCut si collega a Claude tramite la CLI ufficiale di Claude Code. Il pulsante qui sotto esegue l’installer ufficiale di Anthropic (senza diritti di amministratore) e ricontrolla al termine.',
+  '正在安装 Claude Code…（可能需要几分钟）': 'Installazione di Claude Code… (può richiedere qualche minuto)',
+  '更新 Claude Code': 'Aggiorna Claude Code',
+  '安装 Claude Code': 'Installa Claude Code',
+  '安装完成。': 'Installazione completata.',
+  '安装失败：{message}': 'Installazione non riuscita: {message}',
 };
 
 export default overrides;

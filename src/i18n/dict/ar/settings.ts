@@ -600,4 +600,10 @@ export default {
   '无法启动 Claude 登录：{message}': 'تعذّر بدء تسجيل الدخول إلى Claude: {message}',
   '授权码提交失败：{message}': 'تعذّر إرسال الرمز: {message}',
   '无法退出 Claude 登录：{message}': 'تعذّر تسجيل الخروج من Claude: {message}',
+  'OpenChatCut 通过官方 Claude Code CLI 连接 Claude。点击下面的按钮运行 Anthropic 官方安装程序（无需管理员权限），完成后会自动重新检测。': 'يتصل OpenChatCut بـ Claude عبر Claude Code CLI الرسمية. الزر أدناه يشغّل مثبّت Anthropic الرسمي (دون صلاحيات المسؤول) ثم يعيد التحقق تلقائياً عند الانتهاء.',
+  '正在安装 Claude Code…（可能需要几分钟）': 'جارٍ تثبيت Claude Code… (قد يستغرق بضع دقائق)',
+  '更新 Claude Code': 'تحديث Claude Code',
+  '安装 Claude Code': 'تثبيت Claude Code',
+  '安装完成。': 'تم التثبيت.',
+  '安装失败：{message}': 'فشل التثبيت: {message}',
 } as Record<string, string>;

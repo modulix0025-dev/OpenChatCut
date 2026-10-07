@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { constants } from 'node:fs';
-import { access, stat } from 'node:fs/promises';
+import { access, readdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { delimiter, isAbsolute, join, resolve, sep } from 'node:path';
 import { claudeCodeCommand } from './command.ts';
@@ -41,15 +41,56 @@ function configuredCandidates(): string[] {
   return pathCandidates(configured);
 }
 
+/**
+ * Where each official (and common) Windows install method puts the CLI. A
+ * desktop app started from the Start menu often has an older PATH than the
+ * terminal the user installed from, so the known locations are probed
+ * directly instead of trusting PATH alone.
+ */
+export function windowsCandidates(): string[] {
+  const env = process.env;
+  const profile = env.USERPROFILE || homedir();
+  const appData = env.APPDATA || join(profile, 'AppData', 'Roaming');
+  const localAppData = env.LOCALAPPDATA || join(profile, 'AppData', 'Local');
+  const programFiles = [env.ProgramFiles, env.ProgramW6432, 'C:\\Program Files'].filter(Boolean) as string[];
+  return [
+    // Native installer (irm https://claude.ai/install.ps1 | iex)
+    join(profile, '.local', 'bin', 'claude.exe'),
+    // WinGet (winget install Anthropic.ClaudeCode)
+    join(localAppData, 'Microsoft', 'WinGet', 'Links', 'claude.exe'),
+    // npm global, default prefix and nvm / Node installer prefixes
+    join(appData, 'npm', 'claude.cmd'),
+    join(appData, 'npm', 'claude.exe'),
+    ...(env.NVM_SYMLINK ? [join(env.NVM_SYMLINK, 'claude.cmd')] : []),
+    'C:\\nvm4w\\nodejs\\claude.cmd',
+    ...programFiles.map((dir) => join(dir, 'nodejs', 'claude.cmd')),
+    // Other package managers
+    join(localAppData, 'Programs', 'claude', 'claude.exe'),
+    join(localAppData, 'pnpm', 'claude.cmd'),
+    join(profile, 'scoop', 'shims', 'claude.exe'),
+    join(profile, '.bun', 'bin', 'claude.exe'),
+    join(profile, '.volta', 'bin', 'claude.exe'),
+  ];
+}
+
+/** WinGet's package folder carries a version suffix, so it is listed, not guessed. */
+async function wingetPackageCandidates(): Promise<string[]> {
+  if (process.platform !== 'win32') return [];
+  const localAppData = process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local');
+  const packages = join(localAppData, 'Microsoft', 'WinGet', 'Packages');
+  try {
+    const entries = await readdir(packages, { withFileTypes: true });
+    return entries
+      .filter((entry) => entry.isDirectory() && /^Anthropic\.ClaudeCode/i.test(entry.name))
+      .map((entry) => join(packages, entry.name, 'claude.exe'));
+  } catch {
+    return [];
+  }
+}
+
 function commonCandidates(): string[] {
   const home = homedir();
-  if (process.platform === 'win32') {
-    return [
-      process.env.APPDATA ? join(process.env.APPDATA, 'npm', 'claude.cmd') : '',
-      process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, 'Programs', 'claude', 'claude.exe') : '',
-      process.env.USERPROFILE ? join(process.env.USERPROFILE, '.local', 'bin', 'claude.exe') : '',
-    ].filter(Boolean);
-  }
+  if (process.platform === 'win32') return windowsCandidates();
   return [
     join(home, '.local', 'bin', 'claude'),
     join(home, '.npm-global', 'bin', 'claude'),
@@ -77,6 +118,7 @@ export async function resolveClaudeCodeCli(): Promise<string | null> {
     ...configuredCandidates(),
     ...pathCandidates('claude'),
     ...commonCandidates(),
+    ...await wingetPackageCandidates(),
   ];
   const unique = [...new Set(candidates)];
   const checks = await Promise.all(unique.map(async (candidate) => ({

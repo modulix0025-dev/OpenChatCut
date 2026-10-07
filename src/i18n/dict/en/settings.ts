@@ -681,4 +681,10 @@ export default {
   '无法启动 Claude 登录：{message}': 'Couldn’t start Claude sign-in: {message}',
   '授权码提交失败：{message}': 'Couldn’t send the code: {message}',
   '无法退出 Claude 登录：{message}': 'Couldn’t sign out of Claude: {message}',
+  'OpenChatCut 通过官方 Claude Code CLI 连接 Claude。点击下面的按钮运行 Anthropic 官方安装程序（无需管理员权限），完成后会自动重新检测。': 'OpenChatCut connects to Claude through the official Claude Code CLI. The button below runs Anthropic’s official installer (no administrator rights needed) and rechecks when it finishes.',
+  '正在安装 Claude Code…（可能需要几分钟）': 'Installing Claude Code… (this can take a few minutes)',
+  '更新 Claude Code': 'Update Claude Code',
+  '安装 Claude Code': 'Install Claude Code',
+  '安装完成。': 'Installed.',
+  '安装失败：{message}': 'Install failed: {message}',
 } as Record<string, string>;

@@ -2,6 +2,7 @@ import type {
   ClaudeCodeAgentModelsResponse,
   ClaudeCodeAgentStatus,
   ClaudeCodeConnectionTestResult,
+  ClaudeCodeInstallResult,
   ClaudeCodeLoginStartRequest,
   ClaudeCodeLoginState,
 } from '../../../shared/claude-code-agent';
@@ -57,4 +58,8 @@ export async function logoutClaudeCode(): Promise<void> {
 
 export function testClaudeCodeConnection(model?: string): Promise<ClaudeCodeConnectionTestResult> {
   return requestJson<ClaudeCodeConnectionTestResult>('/api/claude-code/test', postJson(model ? { model } : {}));
+}
+
+export function installClaudeCodeCli(): Promise<ClaudeCodeInstallResult> {
+  return requestJson<ClaudeCodeInstallResult>('/api/claude-code/install', postJson());
 }

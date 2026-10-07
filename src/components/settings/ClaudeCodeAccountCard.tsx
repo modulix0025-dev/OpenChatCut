@@ -35,6 +35,9 @@ export function ClaudeCodeAccountCard({ controller }: {
     <section style={card} aria-live="polite">
       <StatusSummary state={state} controller={controller} />
       {(controller.status?.envOverrides?.length ?? 0) > 0 && <EnvOverrideWarning names={controller.status!.envOverrides!} />}
+      {(state === 'missing' || (!!controller.status?.installed && !canSignIn)) && (
+        <InstallPanel controller={controller} update={state !== 'missing'} />
+      )}
       {state === 'pending' && <PendingLogin controller={controller} />}
       {showForm && (
         <LoginForm controller={controller} switching={switching} onCancel={() => setSwitching(false)}
@@ -61,6 +64,34 @@ export function ClaudeCodeAccountCard({ controller }: {
       {canSignIn && state !== 'signed-in' && <TerminalFallback />}
       {controller.status?.path && <div style={pathLine} title={controller.status.path}>{controller.status.path}</div>}
     </section>
+  );
+}
+
+function InstallPanel({ controller, update }: { controller: ClaudeCodeSettingsController; update: boolean }) {
+  const t = useT();
+  const busy = controller.actionBusy !== null;
+  const installing = controller.actionBusy === 'install';
+  const result = controller.installResult;
+  return (
+    <div style={loginForm}>
+      <div style={hint}>
+        {t('OpenChatCut 通过官方 Claude Code CLI 连接 Claude。点击下面的按钮运行 Anthropic 官方安装程序（无需管理员权限），完成后会自动重新检测。')}
+      </div>
+      <code style={{ ...valueCode, ...prominentCode, fontSize: 11, direction: 'ltr', textAlign: 'start' }}>
+        {navigator.userAgent.includes('Windows') ? 'irm https://claude.ai/install.ps1 | iex' : 'curl -fsSL https://claude.ai/install.sh | bash'}
+      </code>
+      <div style={actions}>
+        <button type="button" disabled={busy} onClick={() => { void controller.installCli(); }}
+          style={{ ...button, color: theme.onAccent, background: theme.accent, opacity: busy ? 0.5 : 1, cursor: busy ? 'default' : 'pointer' }}>
+          {installing ? t('正在安装 Claude Code…（可能需要几分钟）') : update ? t('更新 Claude Code') : t('安装 Claude Code')}
+        </button>
+      </div>
+      {result && (
+        <div role="status" style={{ ...testLine, whiteSpace: 'pre-wrap', color: result.ok ? theme.success : theme.danger }}>
+          {result.ok ? t('安装完成。') : t('安装失败：{message}', { message: result.message })}
+        </div>
+      )}
+    </div>
   );
 }
 

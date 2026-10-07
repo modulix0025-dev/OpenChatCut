@@ -29,6 +29,13 @@ export interface ClaudeCodeLoginStartRequest {
   readonly sso?: boolean;
 }
 
+export interface ClaudeCodeInstallResult {
+  readonly ok: boolean;
+  /** Last lines of the official installer's output, or why it failed. */
+  readonly message: string;
+  readonly durationMs: number;
+}
+
 export interface ClaudeCodeConnectionTestResult {
   readonly ok: boolean;
   readonly message: string;

@@ -5,6 +5,7 @@ import type {
   ClaudeCodeAgentModel,
   ClaudeCodeAgentStatus,
   ClaudeCodeConnectionTestResult,
+  ClaudeCodeInstallResult,
   ClaudeCodeLoginStartRequest,
   ClaudeCodeLoginState,
 } from '../../../shared/claude-code-agent';
@@ -12,6 +13,7 @@ import {
   cancelClaudeCodeLogin,
   fetchClaudeCodeModels,
   fetchClaudeCodeStatus,
+  installClaudeCodeCli,
   logoutClaudeCode,
   startClaudeCodeLogin,
   submitClaudeCodeLoginCode,
@@ -42,7 +44,9 @@ export interface ClaudeCodeSettingsController {
   readonly discoverModels: () => Promise<readonly ClaudeCodeAgentModel[]>;
   /** The in-app sign-in that is running, if any. */
   readonly login: ClaudeCodeLoginState | null;
-  readonly actionBusy: 'login' | 'code' | 'cancel' | 'logout' | 'test' | null;
+  readonly actionBusy: 'login' | 'code' | 'cancel' | 'logout' | 'test' | 'install' | null;
+  readonly installResult: ClaudeCodeInstallResult | null;
+  readonly installCli: () => Promise<void>;
   readonly actionError: string | null;
   readonly testResult: ClaudeCodeConnectionTestResult | null;
   readonly startLogin: (request: ClaudeCodeLoginStartRequest) => Promise<void>;
@@ -82,6 +86,7 @@ function useClaudeCodeAccountActions(remote: RemoteStatusControl, onAccountChang
   const [busy, setBusy] = useState<ClaudeCodeSettingsController['actionBusy']>(null);
   const [error, setError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<ClaudeCodeConnectionTestResult | null>(null);
+  const [installResult, setInstallResult] = useState<ClaudeCodeInstallResult | null>(null);
   const serverLogin = remote.state.status?.login ?? null;
 
   // The server is the source of truth for the sign-in: adopt its view on each
@@ -171,7 +176,17 @@ function useClaudeCodeAccountActions(remote: RemoteStatusControl, onAccountChang
     if (mounted.current) setTestResult(result);
   }), [mounted, run]);
 
-  return { login, busy, error, testResult, startLogin, submitLoginCode, cancelLogin, logout, testConnection };
+  const installCli = useCallback(() => run('install', async () => {
+    setInstallResult(null);
+    const result = await installClaudeCodeCli();
+    if (mounted.current) setInstallResult(result);
+    await refresh();
+  }), [mounted, refresh, run]);
+
+  return {
+    login, busy, error, testResult, installResult,
+    startLogin, submitLoginCode, cancelLogin, logout, testConnection, installCli,
+  };
 }
 
 function useMountedRef(): RefObject<boolean> {
@@ -278,6 +293,8 @@ export function useClaudeCodeSettings(savedModel?: string): ClaudeCodeSettingsCo
     actionBusy: actions.busy,
     actionError: actions.error,
     testResult: actions.testResult,
+    installResult: actions.installResult,
+    installCli: actions.installCli,
     startLogin: actions.startLogin,
     submitLoginCode: actions.submitLoginCode,
     cancelLogin: actions.cancelLogin,
